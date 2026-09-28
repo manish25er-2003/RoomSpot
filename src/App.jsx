@@ -5,13 +5,21 @@ import PortfolioPage from './pages/PortfolioPage'
 import './App.css'
 
 const AUTH_KEY = 'roomspot-auth'
+const API_BASE = 'http://localhost:5000/api'
 
 function readAuth() {
   try {
     const stored = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null')
-    return stored && stored.user ? stored : { user: null, role: null }
+    if (stored && stored.user) {
+      return {
+        user: stored.user,
+        role: stored.role || stored.user.role || null,
+        token: stored.token || null,
+      }
+    }
+    return { user: null, role: null, token: null }
   } catch {
-    return { user: null, role: null }
+    return { user: null, role: null, token: null }
   }
 }
 
@@ -27,12 +35,10 @@ function AuthPage({ mode, onSubmit }) {
 
   const handleSubmit = (event) => {
     event.preventDefault()
-    const currentUser = {
-      name: form.fullName || (isLogin ? 'Demo User' : 'New User'),
-      email: form.email,
-      role: form.email.toLowerCase().includes('admin') ? 'admin' : 'tenant',
-    }
-    onSubmit(currentUser)
+    onSubmit({
+      ...form,
+      mode: isLogin ? 'login' : 'register',
+    })
   }
 
   return (
@@ -165,6 +171,25 @@ function DashboardPage({ role, user, onLogout }) {
     { id: 3, name: 'Maintenance', owner: 'Neha Patel', amount: '₹1,200', due: 'Paid', tag: 'success' },
   ])
 
+  const [upiDetails, setUpiDetails] = useState({ adminUpiId: '' })
+
+  const fetchAdminUpi = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/settings/payment')
+      if (!response.ok) {
+        return
+      }
+      const data = await response.json()
+      setUpiDetails({ adminUpiId: data.adminUpiId || '7087338600@ybl' })
+    } catch {
+      setUpiDetails({ adminUpiId: '7087338600@ybl' })
+    }
+  }
+
+  useEffect(() => {
+    fetchAdminUpi()
+  }, [])
+
   const [complaints, setComplaints] = useState([
     { id: 1, title: 'Water leakage', owner: 'Aisha Khan', status: 'Open', priority: 'High' },
     { id: 2, title: 'Fan repair', owner: 'Rohit Verma', status: 'In review', priority: 'Medium' },
@@ -193,6 +218,15 @@ function DashboardPage({ role, user, onLogout }) {
 
   const markPaid = (id) => {
     setPayments((prev) => prev.map((item) => (item.id === id ? { ...item, due: 'Paid', tag: 'success' } : item)))
+  }
+
+  const handleTenantPayNow = async (payment) => {
+    if (payment?.due !== 'Pending') {
+      return
+    }
+
+    const nextUpi = upiDetails.adminUpiId || '7087338600@ybl'
+    window.alert(`Pay to: ${nextUpi}`)
   }
 
   const resolveComplaint = (id) => {
@@ -422,7 +456,7 @@ function DashboardPage({ role, user, onLogout }) {
                 <span><em className={`status-badge ${payment.tag === 'success' ? 'success' : 'warning'}`}>{payment.due}</em></span>
                 <span>
                   {payment.due === 'Pending' ? (
-                    <button type="button" className="action-button small" onClick={() => markPaid(payment.id)}>Mark paid</button>
+                    <button type="button" className="action-button small" onClick={() => handleTenantPayNow(payment)}>Pay Now</button>
                   ) : (
                     <span className="muted-label">Completed</span>
                   )}
@@ -666,8 +700,8 @@ function ProtectedRoute({ isAuthenticated, allowedRole, userRole, children }) {
 }
 
 function AppRoutes({ auth, onLogin, onLogout }) {
-  const isAuthenticated = Boolean(auth?.user)
-  const userRole = auth?.role || null
+  const isAuthenticated = Boolean(auth?.user && auth?.token)
+  const userRole = auth?.role || auth?.user?.role || null
 
   return (
     <Routes>
@@ -719,23 +753,57 @@ export default function App() {
     localStorage.setItem(AUTH_KEY, JSON.stringify(auth))
   }, [auth])
 
-  const handleAuth = (user) => {
-    const nextAuth = {
-      user,
-      role: user.role,
-    }
-    setAuth(nextAuth)
+  const handleAuth = async ({ mode, fullName, email, password }) => {
+    const endpoint = mode === 'login' ? 'login' : 'register'
+    const cleanedEmail = String(email || '').trim().toLowerCase()
+    const cleanedPassword = String(password || '').trim()
 
-    if (user.role === 'admin') {
-      window.location.assign('/admin/dashboard')
-      return
-    }
+    try {
+      const response = await fetch(`${API_BASE}/auth/${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: fullName,
+          email: cleanedEmail,
+          password: cleanedPassword,
+        }),
+      })
 
-    window.location.assign('/dashboard')
+      const data = await response.json()
+
+      if (!response.ok) {
+        window.alert(data?.message || 'Authentication failed')
+        return
+      }
+
+      if (mode === 'register') {
+        window.alert('Registration successful. Please log in to continue.')
+        window.location.assign('/login')
+        return
+      }
+
+      const nextAuth = {
+        user: data.user,
+        role: data.user.role,
+        token: data.token,
+      }
+
+      setAuth(nextAuth)
+
+      if (data.user.role === 'admin') {
+        window.location.assign('/admin/dashboard')
+        return
+      }
+
+      window.location.assign('/dashboard')
+    } catch (error) {
+      console.error('Auth request failed:', error)
+      window.alert('Unable to reach the server. Please check the backend connection.')
+    }
   }
 
   const handleLogout = () => {
-    setAuth({ user: null, role: null })
+    setAuth({ user: null, role: null, token: null })
     window.location.assign('/')
   }
 
