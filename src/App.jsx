@@ -171,7 +171,18 @@ function DashboardPage({ role, user, onLogout }) {
     { id: 3, name: 'Maintenance', owner: 'Neha Patel', amount: '₹1,200', due: 'Paid', tag: 'success' },
   ])
 
+  const tenantPaymentSummary = [
+    { label: 'Room Rent', amount: 8000, status: 'Pending' },
+    { label: 'Electricity', amount: 1200, status: 'Pending' },
+    { label: 'Water', amount: 300, status: 'Pending' },
+    { label: 'Maintenance', amount: 500, status: 'Pending' },
+  ]
+
+  const tenantTotalDue = tenantPaymentSummary.reduce((sum, item) => sum + item.amount, 0)
+  const hasPendingTenantPayment = tenantPaymentSummary.some((item) => item.status === 'Pending')
+
   const [upiDetails, setUpiDetails] = useState({ adminUpiId: '' })
+  const [upiInput, setUpiInput] = useState('')
 
   const fetchAdminUpi = async () => {
     try {
@@ -180,9 +191,13 @@ function DashboardPage({ role, user, onLogout }) {
         return
       }
       const data = await response.json()
-      setUpiDetails({ adminUpiId: data.adminUpiId || '7087338600@ybl' })
+      const next = data.adminUpiId || '7087338600@ybl'
+      setUpiDetails({ adminUpiId: next })
+      setUpiInput(next)
     } catch {
-      setUpiDetails({ adminUpiId: '7087338600@ybl' })
+      const fallback = '7087338600@ybl'
+      setUpiDetails({ adminUpiId: fallback })
+      setUpiInput(fallback)
     }
   }
 
@@ -195,6 +210,13 @@ function DashboardPage({ role, user, onLogout }) {
     { id: 2, title: 'Fan repair', owner: 'Rohit Verma', status: 'In review', priority: 'Medium' },
     { id: 3, title: 'Wi-Fi issue', owner: 'Neha Patel', status: 'Resolved', priority: 'Low' },
   ])
+
+  const [complaintForm, setComplaintForm] = useState({
+    title: '',
+    category: 'Maintenance',
+    description: '',
+  })
+  const [showComplaintForm, setShowComplaintForm] = useState(false)
 
   const [messages, setMessages] = useState([
     { id: 1, from: 'Owner', preview: 'The room inspection is scheduled for Friday.', unread: 2 },
@@ -227,6 +249,66 @@ function DashboardPage({ role, user, onLogout }) {
 
     const nextUpi = upiDetails.adminUpiId || '7087338600@ybl'
     window.alert(`Pay to: ${nextUpi}`)
+  }
+
+  const handleTenantPaymentRowPay = () => {
+    const nextUpi = upiDetails.adminUpiId || '7087338600@ybl'
+    window.alert(`Pay to: ${nextUpi}`)
+  }
+
+  const handleSaveAdminUpi = async () => {
+    const nextValue = (upiInput || '').trim() || '7087338600@ybl'
+    const token = readAuth().token
+
+    try {
+      const response = await fetch(`${API_BASE}/settings/payment`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ adminUpiId: nextValue }),
+      })
+
+      const data = await response.json()
+      if (!response.ok) {
+        window.alert(data?.message || 'Unable to update UPI ID')
+        return
+      }
+
+      setUpiDetails({ adminUpiId: data.adminUpiId || nextValue })
+      setUpiInput(data.adminUpiId || nextValue)
+      window.alert('Admin UPI ID updated successfully.')
+    } catch {
+      window.alert('Unable to reach the server. Please check the backend connection.')
+    }
+  }
+
+  const handleComplaintFieldChange = (event) => {
+    const { name, value } = event.target
+    setComplaintForm((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const handleCreateComplaint = () => {
+    const title = complaintForm.title.trim()
+    if (!title) {
+      window.alert('Please enter a complaint title.')
+      return
+    }
+
+    const newComplaint = {
+      id: Date.now(),
+      title,
+      owner: user?.name || 'Tenant',
+      status: 'Open',
+      priority: complaintForm.category,
+    }
+
+    setComplaints((prev) => [newComplaint, ...prev])
+    setComplaintForm({ title: '', category: 'Maintenance', description: '' })
+    setShowComplaintForm(false)
+    setActiveSection('Complaints')
+    window.alert('Complaint submitted successfully.')
   }
 
   const resolveComplaint = (id) => {
@@ -376,7 +458,16 @@ function DashboardPage({ role, user, onLogout }) {
               <h3>Your room</h3>
               <p>Stay and lease details</p>
             </div>
-            <button type="button" className="action-button primary">Request support</button>
+            <button
+              type="button"
+              className="action-button primary"
+              onClick={() => {
+                setActiveSection('Complaints')
+                setShowComplaintForm(true)
+              }}
+            >
+              Request support
+            </button>
           </div>
 
           <div className="room-summary">
@@ -442,6 +533,30 @@ function DashboardPage({ role, user, onLogout }) {
             </div>
           </div>
 
+          <div className="tenant-payment-row-wrap">
+            <div className="tenant-payment-row">
+              {tenantPaymentSummary.map((item) => (
+                <div key={item.label} className="tenant-payment-item">
+                  <span className="tenant-payment-label">{item.label}</span>
+                  <strong>₹{item.amount.toLocaleString('en-IN')}</strong>
+                </div>
+              ))}
+
+              <div className="tenant-payment-total">
+                <span>Total</span>
+                <strong>₹{tenantTotalDue.toLocaleString('en-IN')}</strong>
+              </div>
+
+              <div className="tenant-payment-action">
+                {hasPendingTenantPayment ? (
+                  <button type="button" className="action-button primary pay-row-button" onClick={handleTenantPaymentRowPay}>Pay Now</button>
+                ) : (
+                  <span className="status-badge success pay-row-badge">Paid</span>
+                )}
+              </div>
+            </div>
+          </div>
+
           <div className="data-table">
             <div className="table-head">
               <span>Type</span>
@@ -476,6 +591,19 @@ function DashboardPage({ role, user, onLogout }) {
               <h3>Collections</h3>
               <p>Payment summary</p>
             </div>
+          </div>
+
+          <div className="upi-settings-panel">
+            <label>
+              Admin UPI ID
+              <input
+                type="text"
+                value={upiInput}
+                onChange={(event) => setUpiInput(event.target.value)}
+                placeholder="Enter UPI ID"
+              />
+            </label>
+            <button type="button" className="action-button primary" onClick={handleSaveAdminUpi}>Update UPI</button>
           </div>
 
           <div className="data-table">
@@ -514,8 +642,52 @@ function DashboardPage({ role, user, onLogout }) {
               <h3>Complaints</h3>
               <p>{isAdmin ? 'Support queue' : 'Your reported issues'}</p>
             </div>
-            <button type="button" className="action-button primary">New complaint</button>
+            <button type="button" className="action-button primary" onClick={() => setShowComplaintForm((prev) => !prev)}>New complaint</button>
           </div>
+
+          {showComplaintForm && (
+            <div className="complaint-form-panel">
+              <div className="complaint-form-grid">
+                <label>
+                  Complaint title
+                  <input
+                    type="text"
+                    name="title"
+                    value={complaintForm.title}
+                    onChange={handleComplaintFieldChange}
+                    placeholder="Describe the issue"
+                  />
+                </label>
+
+                <label>
+                  Category
+                  <select name="category" value={complaintForm.category} onChange={handleComplaintFieldChange}>
+                    <option>Maintenance</option>
+                    <option>Water</option>
+                    <option>Electricity</option>
+                    <option>Cleaning</option>
+                    <option>Plumbing</option>
+                    <option>Other</option>
+                  </select>
+                </label>
+
+                <label>
+                  Details
+                  <textarea
+                    name="description"
+                    value={complaintForm.description}
+                    onChange={handleComplaintFieldChange}
+                    placeholder="Add more details for the support team"
+                  />
+                </label>
+              </div>
+
+              <div className="complaint-form-actions">
+                <button type="button" className="action-button small" onClick={() => setShowComplaintForm(false)}>Cancel</button>
+                <button type="button" className="action-button primary" onClick={handleCreateComplaint}>Submit complaint</button>
+              </div>
+            </div>
+          )}
 
           <div className="task-list">
             {complaints.map((complaint) => (
