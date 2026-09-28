@@ -1,107 +1,747 @@
-import { useEffect, useMemo, useState } from 'react'
-import axios from 'axios'
+import { useEffect, useState } from 'react'
+import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
+import Home from './pages/Home'
+import PortfolioPage from './pages/PortfolioPage'
 import './App.css'
 
-const apiFetch = async (url, options = {}) => {
-  try { const response = await axios({ url, method: options.method || 'GET', headers: options.headers, data: options.body ? JSON.parse(options.body) : undefined }); return { ok: true, json: async () => response.data } }
-  catch (error) { return { ok: false, json: async () => error.response?.data || { message: error.message } } }
+const AUTH_KEY = 'roomspot-auth'
+
+function readAuth() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null')
+    return stored && stored.user ? stored : { user: null, role: null }
+  } catch {
+    return { user: null, role: null }
+  }
 }
 
-const initialRooms = [
-  { _id: 'r1', number: '102', type: 'Deluxe single', rent: 3000, status: 'Occupied', tenant: 'Rahul Sharma', facilities: ['WiFi', 'Attached bath', 'Fan', 'Bed'] },
-  { _id: 'r2', number: '103', type: 'Standard single', rent: 2500, status: 'Available', tenant: '', facilities: ['WiFi', 'Wash basin', 'Fan', 'Bed'] },
-  { _id: 'r3', number: '201', type: 'Deluxe double', rent: 4500, status: 'Occupied', tenant: 'Priya Patel', facilities: ['WiFi', 'Attached bath', 'AC', 'Bed'] },
-  { _id: 'r4', number: '202', type: 'Standard single', rent: 2800, status: 'Maintenance', tenant: '', facilities: ['Wash basin', 'Fan', 'Bed'] },
-]
-const initialPayments = [
-  { _id: 'p1', name: 'Rahul Sharma', room: '102', month: 'September 2026', amount: 3000, dueDate: '05 Sep 2026', status: 'Pending', method: '—' },
-  { _id: 'p2', name: 'Priya Patel', room: '201', month: 'September 2026', amount: 4500, dueDate: '05 Sep 2026', status: 'Paid', method: 'UPI' },
-  { _id: 'p3', name: 'Arjun Kumar', room: '204', month: 'September 2026', amount: 3000, dueDate: '05 Sep 2026', status: 'Overdue', method: '—' },
-  { _id: 'p4', name: 'Sneha Das', room: '301', month: 'September 2026', amount: 3500, dueDate: '05 Sep 2026', status: 'Paid', method: 'Bank transfer' },
-]
-const initialComplaints = [
-  { _id: 'c1', title: 'Bathroom tap is leaking', category: 'Plumbing', tenant: 'Rahul Sharma', room: '102', status: 'In progress', date: 'Today' },
-  { _id: 'c2', title: 'Light in corridor not working', category: 'Electricity', tenant: 'Priya Patel', room: '201', status: 'Open', date: 'Yesterday' },
-  { _id: 'c3', title: 'Need room cleaning', category: 'Cleaning', tenant: 'Arjun Kumar', room: '204', status: 'Resolved', date: 'Sep 22' },
-]
-const seed = { rooms: initialRooms, payments: initialPayments, complaints: initialComplaints, messages: [{ _id: 'm1', from: 'Rahul Sharma', body: 'Hi, I submitted a maintenance request for the bathroom tap.', time: '10:32 AM', mine: false }, { _id: 'm2', from: 'Admin', body: 'Thanks Rahul, our team will take a look today.', time: '10:41 AM', mine: true }], tenants: [{ _id: 'u1', name: 'Rahul Sharma', email: 'rahul@email.com', room: '102', status: 'Active' }, { _id: 'u2', name: 'Priya Patel', email: 'priya@email.com', room: '201', status: 'Active' }, { _id: 'u3', name: 'Arjun Kumar', email: 'arjun@email.com', room: '204', status: 'Active' }, { _id: 'u4', name: 'Sneha Das', email: 'sneha@email.com', room: '301', status: 'Active' }], notifications: [{ title: 'Rent payment received', detail: 'Priya Patel · Room 201', time: '2 hours ago' }, { title: 'New maintenance request', detail: 'Rahul Sharma · Room 102', time: '4 hours ago' }, { title: 'Room 103 is available', detail: 'Room status updated', time: 'Yesterday' }], activity: [{ action: 'Payment received from Priya Patel', time: 'Today, 11:20 AM', icon: '↗' }, { action: 'Complaint updated to In progress', time: 'Today, 10:50 AM', icon: '◷' }, { action: 'New tenant Rahul Sharma added', time: 'Yesterday, 4:12 PM', icon: '+' }] }
-const navAdmin = [['Overview', '▦'], ['Rooms', '⌂'], ['Tenants', '♙'], ['Rent & payments', '₹'], ['Complaints', '▤'], ['Messages', '▢']]
-const navTenant = [['Overview', '▦'], ['My room', '⌂'], ['Payments', '₹'], ['Complaints', '▤'], ['Messages', '▢']]
+function AuthPage({ mode, onSubmit }) {
+  const isLogin = mode === 'login'
+  const navigate = useNavigate()
+  const [form, setForm] = useState({ email: '', password: '', fullName: '' })
 
-function readStore() { try { return { ...seed, ...JSON.parse(localStorage.getItem('maish-data') || '{}') } } catch { return seed } }
-function saveStore(s) { localStorage.setItem('maish-data', JSON.stringify(s)) }
-function Brand() { return <div className="brand"><div className="brand-mark"><svg viewBox="0 0 32 32" fill="none"><path d="M4 14.5 16 5l12 9.5V27H5V14.5" stroke="currentColor" strokeWidth="2.3" strokeLinejoin="round"/><path d="M12 27v-8h8v8M10 13h.1M22 13h.1" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round"/></svg></div><div><strong>Roomspot</strong><span>ROOM MANAGEMENT</span></div></div> }
-function Icon({ name }) { const icons = { search: '⌕', bell: '♧', down: '⌄', plus: '+', more: '···', arrow: '↗', home: '⌂', user: '♙', check: '✓', clock: '◷', chat: '▢', menu: '☰', close: '×' }; return <span className={`icon icon-${name}`}>{icons[name] || name}</span> }
-function Badge({ children }) { return <span className={`badge badge-${String(children).toLowerCase().replaceAll(' ', '-')}`}>{children}</span> }
-function App() {
- const [store, setStore] = useState(readStore)
- const [page, setPage] = useState('Overview')
- const [role, setRole] = useState(localStorage.getItem('maish-role') || 'Admin')
- const [user, setUser] = useState(JSON.parse(localStorage.getItem('maish-user') || 'null'))
- const [token, setToken] = useState(localStorage.getItem('maish-token') || '')
- const [authMode, setAuthMode] = useState('login')
- const [showAuth, setShowAuth] = useState(!localStorage.getItem('maish-entered'))
- const [apiState, setApiState] = useState('checking')
- const [modal, setModal] = useState('')
- const [query, setQuery] = useState('')
- const [toast, setToast] = useState('')
- const [mobileNav, setMobileNav] = useState(false)
- const [installPrompt, setInstallPrompt] = useState(null)
- const [isInstalled, setIsInstalled] = useState(window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true)
- const [selected, setSelected] = useState(null)
- const [chatInput, setChatInput] = useState('')
- const [noticeOpen, setNoticeOpen] = useState(false)
- const [form, setForm] = useState({})
- const api = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
- const nav = role === 'Admin' ? navAdmin : navTenant
- const act = (msg) => { setToast(msg); window.setTimeout(() => setToast(''), 2600) }
- useEffect(() => { saveStore(store) }, [store])
- useEffect(() => { const onPrompt = event => { event.preventDefault(); setInstallPrompt(event) }; const onInstalled = () => { setIsInstalled(true); setInstallPrompt(null); act('Roomspot installed successfully') }; window.addEventListener('beforeinstallprompt', onPrompt); window.addEventListener('appinstalled', onInstalled); return () => { window.removeEventListener('beforeinstallprompt', onPrompt); window.removeEventListener('appinstalled', onInstalled) } }, [])
- useEffect(() => { apiFetch(`${api}/health`).then(r => r.ok ? setApiState('connected') : setApiState('offline')).catch(() => setApiState('offline')) }, [api])
- useEffect(() => { if (token) { const headers = { Authorization: `Bearer ${token}` }; Promise.allSettled([apiFetch(`${api}/auth/me`, { headers }).then(r => r.ok ? r.json() : Promise.reject()), apiFetch(`${api}/rooms`, { headers }).then(r => r.ok ? r.json() : Promise.reject()), apiFetch(`${api}/users`, { headers }).then(r => r.ok ? r.json() : null), apiFetch(`${api}/payments`, { headers }).then(r => r.ok ? r.json() : Promise.reject()), apiFetch(`${api}/complaints`, { headers }).then(r => r.ok ? r.json() : Promise.reject()), apiFetch(`${api}/messages`, { headers }).then(r => r.ok ? r.json() : Promise.reject()), apiFetch(`${api}/notifications`, { headers }).then(r => r.ok ? r.json() : Promise.reject()), apiFetch(`${api}/activity`, { headers }).then(r => r.ok ? r.json() : null)]).then(([me,rooms,users,payments,complaints,messages,notifications,activity]) => { if (me.status === 'fulfilled') { setUser(me.value.user); setRole(me.value.user.role === 'admin' ? 'Admin' : 'Tenant') }; setStore(s => ({ ...s, ...(rooms.status === 'fulfilled' ? { rooms: rooms.value.rooms.map(r => ({ ...r, tenant: r.tenant?.name || '' })) } : {}), ...(users.status === 'fulfilled' && users.value ? { tenants: users.value.users.map(u => ({...u, room: typeof u.room === 'object' ? u.room?.number : u.room, status: u.isActive === false ? 'Inactive' : 'Active' })) } : {}), ...(payments.status === 'fulfilled' ? { payments: payments.value.payments.map(p => ({ ...p, name: p.tenant?.name || '', room: p.room?.number || '', dueDate: new Date(p.dueDate).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}), method: p.method || '—' })) } : {}), ...(complaints.status === 'fulfilled' ? { complaints: complaints.value.complaints.map(c => ({ ...c, tenant: c.tenant?.name || '', room: c.room?.number || '' })) } : {}), ...(messages.status === 'fulfilled' ? { messages: messages.value.messages.map(m => ({ _id: m._id, from: m.sender?.name || 'Maish', body: m.body, time: new Date(m.createdAt).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}), mine: m.sender?._id === (me.status === 'fulfilled' ? me.value.user.id : '') })) } : {}), ...(notifications.status === 'fulfilled' ? { notifications: notifications.value.notifications.map(n => ({ title: n.title, detail: n.detail, time: new Date(n.createdAt).toLocaleDateString() })) } : {}), ...(activity.status === 'fulfilled' && activity.value ? { activity: activity.value.activity.map(a => ({ action: a.action, time: new Date(a.createdAt).toLocaleString(), icon: '◷' })) } : {}) })) }).catch(() => {}) } }, [token, api])
- const occupied = store.rooms.filter(r => r.status === 'Occupied').length
- const collected = store.payments.filter(p => p.status === 'Paid').reduce((a, p) => a + Number(p.amount), 0)
- const pending = store.payments.filter(p => p.status === 'Pending').reduce((a, p) => a + Number(p.amount), 0)
- const overdue = store.payments.filter(p => p.status === 'Overdue').reduce((a, p) => a + Number(p.amount), 0)
- const filteredRooms = useMemo(() => store.rooms.filter(r => `${r.number} ${r.type} ${r.tenant} ${r.status}`.toLowerCase().includes(query.toLowerCase())), [store.rooms, query])
- const doAuth = async (e) => { e.preventDefault(); const endpoint = authMode === 'login' ? 'login' : 'register'; const payload = authMode === 'register' ? { ...form, role: 'tenant' } : form
-   try { const res = await apiFetch(`${api}/auth/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); const data = await res.json(); if (!res.ok) throw new Error(data.message || 'Could not sign in'); setToken(data.token); localStorage.setItem('maish-token', data.token); localStorage.setItem('maish-user', JSON.stringify(data.user)); setUser(data.user); setRole(data.user.role === 'admin' ? 'Admin' : 'Tenant'); act(`Welcome, ${data.user.name.split(' ')[0]}`) }
-   catch (error) { if (apiState === 'connected') { act(error.message || 'Sign in failed'); return }; const demo = { name: form.email?.toLowerCase().includes('admin') ? 'Aarav Mehta' : (form.name || 'Rahul Sharma'), email: form.email || 'rahul@email.com', role: form.email?.toLowerCase().includes('admin') ? 'admin' : 'tenant' }; setUser(demo); setRole(demo.role === 'admin' ? 'Admin' : 'Tenant'); localStorage.setItem('maish-user', JSON.stringify(demo)); act('Demo mode · API is not connected') }
-   localStorage.setItem('maish-entered', 'yes'); setShowAuth(false)
- }
- const installApp = async () => { if (!installPrompt) return; await installPrompt.prompt(); const choice = await installPrompt.userChoice; if (choice?.outcome === 'accepted') setInstallPrompt(null) }
- const logOut = () => { setUser(null); setToken(''); setRole('Admin'); setShowAuth(true); localStorage.removeItem('maish-token'); localStorage.removeItem('maish-user'); localStorage.removeItem('maish-entered') }
- const mutate = async (path, method, body) => { if (token) { try { const res = await apiFetch(`${api}/${path}`, { method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, ...(body ? { body: JSON.stringify(body) } : {}) }); const data = await res.json(); if (!res.ok) throw new Error(data.message); return data } catch (err) { if (apiState === 'connected') act(err.message || 'API request failed') } } return null }
- const openModal = (name, data = null) => { setModal(name); setSelected(data); setForm(data ? { ...data } : {}) }
- const saveRoom = async (e) => { e.preventDefault(); const data = { ...form, rent: Number(form.rent), facilities: typeof form.facilities === 'string' ? form.facilities.split(',').map(x => x.trim()).filter(Boolean) : form.facilities || [] }; delete data._id; delete data.tenant; const remote = await mutate(selected ? `rooms/${selected._id}` : 'rooms', selected ? 'PUT' : 'POST', data); const room = remote?.room || { ...data, _id: selected?._id || `r${Date.now()}` }; setStore(s => ({ ...s, rooms: selected ? s.rooms.map(r => r._id === selected._id ? { ...r, ...room } : r) : [room, ...s.rooms] })); setModal(''); act(selected ? 'Room updated' : 'Room added') }
- const deleteRoom = async room => { await mutate(`rooms/${room._id}`, 'DELETE'); setStore(s => ({ ...s, rooms: s.rooms.filter(r => r._id !== room._id) })); act(`Room ${room.number} deleted`) }
- const assignRoom = async e => { e.preventDefault(); await mutate(`rooms/${selected._id}/assign`, 'PATCH', { tenantId: form.tenantId, tenantName: form.tenantName, rent: Number(form.rent || selected.rent) }); setStore(s => ({ ...s, rooms: s.rooms.map(r => r._id === selected._id ? { ...r, status: 'Occupied', tenant: form.tenantName, rent: Number(form.rent || r.rent) } : r) })); setModal(''); act('Tenant assigned to room') }
- const vacateRoom = async room => { await mutate(`rooms/${room._id}/vacate`, 'PATCH', {}); setStore(s => ({ ...s, rooms: s.rooms.map(r => r._id === room._id ? { ...r, status: 'Available', tenant: '' } : r) })); act(`Room ${room.number} vacated`) }
- const updatePayment = async payment => { const status = payment.status === 'Paid' ? 'Pending' : 'Paid'; await mutate(role === 'Tenant' && status === 'Paid' ? `payments/${payment._id}/pay` : `payments/${payment._id}`, role === 'Tenant' && status === 'Paid' ? 'POST' : 'PATCH', { status, method: status === 'Paid' ? 'UPI' : '' }); setStore(s => ({ ...s, payments: s.payments.map(p => p._id === payment._id ? { ...p, status, method: status === 'Paid' ? 'UPI' : '—' } : p) })); act(status === 'Paid' ? 'Payment marked as paid' : 'Payment reopened') }
- const downloadReceipt = async payment => { const remote = await mutate(`payments/${payment._id}/receipt`, 'GET'); const r = remote?.receipt || { receiptNumber: `MAI-${payment._id}`, tenant: payment.name, room: payment.room, month: payment.month, amount: payment.amount, status: payment.status, method: payment.method, dueDate: payment.dueDate }; const lines = ['ROOMSPOT LIVING', 'PAYMENT RECEIPT', `Receipt: ${r.receiptNumber || '—'}`, `Tenant: ${r.tenant || payment.name || 'Tenant'}`, `Room: ${r.room || payment.room || '—'}`, `Month: ${r.month || payment.month || '—'}`, `Amount: INR ${Number(r.amount || payment.amount).toLocaleString('en-IN')}`, `Status: ${r.status || payment.status}`, `Method: ${r.method || payment.method || '—'}`, `Due date: ${r.dueDate ? new Date(r.dueDate).toLocaleDateString() : payment.dueDate || '—'}`, `Payment date: ${r.paymentDate ? new Date(r.paymentDate).toLocaleDateString() : '—'}`, '', 'Thank you.']; const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([lines.join('\n')], {type:'text/plain'})); a.download = `${r.receiptNumber || 'maish-receipt'}.txt`; a.click(); URL.revokeObjectURL(a.href); act('Receipt downloaded') }
- const addComplaint = async e => { e.preventDefault(); const body = { ...form, tenant: user?.name || 'Rahul Sharma', room: role === 'Tenant' ? (store.rooms.find(r => r.tenant === user?.name)?.number || '102') : form.room }; const remote = await mutate('complaints', 'POST', body); setStore(s => ({ ...s, complaints: [{ ...body, _id: remote?.complaint?._id || `c${Date.now()}`, status: 'Open', date: 'Today' }, ...s.complaints] })); setModal(''); act('Complaint submitted') }
- const setComplaint = async c => { const status = c.status === 'Open' ? 'In progress' : c.status === 'In progress' ? 'Resolved' : 'Open'; await mutate(`complaints/${c._id}`, 'PATCH', { status }); setStore(s => ({ ...s, complaints: s.complaints.map(x => x._id === c._id ? { ...x, status } : x) })); act(`Complaint marked ${status.toLowerCase()}`) }
- const sendMessage = async e => { e.preventDefault(); if (!chatInput.trim()) return; const body = chatInput; const recipient = role === 'Admin' ? store.tenants[0]?._id : undefined; const remote = await mutate('messages', 'POST', { body, ...(recipient ? { recipient } : {}) }); setStore(s => ({ ...s, messages: [...s.messages, { _id: remote?.message?._id || `m${Date.now()}`, from: user?.name || role, body, time: 'Just now', mine: true }] })); setChatInput('') }
- const addTenant = async e => { e.preventDefault(); const remote = await mutate('users', 'POST', { ...form, role: 'tenant' }); const tenant = remote?.user || { ...form, _id: `u${Date.now()}`, status: 'Active' }; let assignedRoom = null; if (form.room) { assignedRoom = store.rooms.find(r => r.number === form.room); if (assignedRoom && remote?.user) await mutate(`rooms/${assignedRoom._id}/assign`, 'PATCH', { tenantId: remote.user.id || remote.user._id, tenantName: form.name, rent: assignedRoom.rent }) }; setStore(s => ({ ...s, tenants: [tenant, ...s.tenants], ...(assignedRoom ? { rooms: s.rooms.map(r => r._id === assignedRoom._id ? { ...r, tenant: form.name, status: 'Occupied' } : r) } : {}) })); setModal(''); act('Tenant added') }
- const mainTitle = role === 'Admin' ? 'Good morning, Aarav 👋' : `Welcome home, ${user?.name?.split(' ')[0] || 'Rahul'} 👋`
- if (showAuth) return <div className="auth-page"><div className="auth-side"><Brand/><div className="auth-hero"><div className="eyebrow"><span className="eyebrow-dot"/> THE SMARTER WAY TO STAY</div><h1>Home feels better<br/>when life is <em>in order.</em></h1><p>One simple place for your room, rent and everything in between.</p><div className="auth-illustration"><div className="sun"/><div className="building"><div className="roof"/><div className="house"><div className="window"/><div className="window"/><div className="door"/></div><div className="plant">♧</div></div><div className="ground"/></div><div className="auth-proof"><div className="avatar-stack"><i>R</i><i>P</i><i>A</i><i>+</i></div><span>Making shared living simpler, every day.</span></div></div><small className="auth-copyright">© 2026 Roomspot Living · Made for better living</small></div><div className="auth-form-side"><div className="auth-mobile-brand"><Brand/></div><div className="auth-form"><div className="auth-kicker">{authMode === 'login' ? 'YOUR HOME, AT A GLANCE' : 'A BETTER WAY TO LIVE'}</div><h2>{authMode === 'login' ? 'Welcome back' : 'Create your account'}</h2><p className="auth-sub">{authMode === 'login' ? 'Sign in to pick up where you left off.' : 'Join Maish to manage your stay with ease.'}</p><div className="auth-tabs"><button className={authMode === 'login' ? 'active' : ''} onClick={() => setAuthMode('login')}>Sign in</button><button className={authMode === 'register' ? 'active' : ''} onClick={() => setAuthMode('register')}>Create account</button></div><form onSubmit={doAuth}>{authMode === 'register' && <label>Full name<input required placeholder="e.g. Rahul Sharma" value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })}/></label>}<label>Email address<div className="input-icon">✉<input required type="email" placeholder="you@example.com" value={form.email || ''} onChange={e => setForm({ ...form, email: e.target.value })}/></div></label><label>Password<div className="input-icon">♙<input required minLength="6" type="password" placeholder="Enter your password" value={form.password || ''} onChange={e => setForm({ ...form, password: e.target.value })}/></div></label><button className="primary-btn auth-submit">{authMode === 'login' ? 'Sign in to Maish' : 'Create account'} <span>→</span></button></form><div className="demo-hint"><span className="hint-dot"/><div><b>Explore the demo</b><span>Use any email and password to continue. Try an <b>admin</b> email for the admin view.</span></div></div>{installPrompt && !isInstalled && <button type="button" className="install-app-btn" onClick={installApp}><span>↓</span><div><b>Install Roomspot</b><small>Add the app to your device for quick access.</small></div><i>→</i></button>}<div className="auth-lock">♧ &nbsp;Your information is private and secure</div></div></div></div>
- return <div className="app-shell"><aside className={`sidebar ${mobileNav ? 'open' : ''}`}><div className="sidebar-top"><Brand/><button className="mobile-close" onClick={() => setMobileNav(false)}><Icon name="close"/></button></div><div className="property-select"><div className="property-avatar">M</div><div><b>Roomspot Living</b><span>Property workspace</span></div><Icon name="down"/></div><div className="nav-caption">WORKSPACE</div><nav>{nav.map(([name, icon]) => <button key={name} className={`nav-link ${page === name ? 'active' : ''}`} onClick={() => { setPage(name); setMobileNav(false) }}><span className="nav-icon">{icon}</span>{name}{name === 'Complaints' && <i className="nav-count">2</i>}</button>)}</nav><div className="nav-caption management-cap">MANAGEMENT</div><nav>{[['Activity log', '◷'], ['Notifications', '♧']].map(([name, icon]) => <button key={name} className={`nav-link ${page === name ? 'active' : ''}`} onClick={() => setPage(name)}><span className="nav-icon">{icon}</span>{name}{name === 'Notifications' && <i className="nav-count">3</i>}</button>)}</nav><div className="sidebar-bottom"><div className="help-card"><div className="help-art">✳</div><b>Need a hand?</b><p>We're just a message away.</p><button onClick={() => { setPage('Messages'); setRole('Tenant') }}>Contact support <span>→</span></button></div><button className="profile-mini" onClick={() => openModal('profile')}><div className="user-avatar">{(user?.name || 'Aarav Mehta').split(' ').map(s => s[0]).join('').slice(0,2)}</div><div><b>{user?.name || (role === 'Admin' ? 'Aarav Mehta' : 'Rahul Sharma')}</b><span>{role === 'Admin' ? 'Property manager' : 'Tenant'}</span></div><Icon name="more"/></button></div></aside><main className="main-area"><header className="topbar"><button className="menu-btn" onClick={() => setMobileNav(true)}><Icon name="menu"/></button><div className="breadcrumb">Workspace <span>/</span> <b>{page}</b></div><div className="top-actions">{installPrompt && !isInstalled && <button className="install-top-btn" onClick={installApp}><span>↓</span> Install app</button>}<div className="api-indicator"><i className={apiState === 'connected' ? 'online' : ''}/>{apiState === 'connected' ? 'Connected' : 'Demo mode'}</div><div className="searchbox"><Icon name="search"/><input placeholder="Search anything..." value={query} onChange={e => setQuery(e.target.value)}/><kbd>⌘ K</kbd></div><button className="icon-button notification-button" onClick={() => setNoticeOpen(!noticeOpen)} aria-label="Notifications"><Icon name="bell"/><i/></button>{noticeOpen && <div className="notification-pop"><div className="pop-head"><b>Notifications</b><button onClick={() => setNoticeOpen(false)}>×</button></div>{store.notifications.map((n,i)=><div className="pop-item" key={i}><span className="pop-dot"/><div><b>{n.title}</b><span>{n.detail}</span><small>{n.time}</small></div></div>)}<button className="pop-all" onClick={() => { setPage('Notifications'); setNoticeOpen(false) }}>View all notifications →</button></div>}<button className="top-user"><div className="user-avatar small">{role === 'Admin' ? 'AM' : 'RS'}</div><span>{role}</span><Icon name="down"/></button><button className="logout-btn" onClick={logOut} title="Sign out">↗</button></div></header><div className="page-content"><div className="page-heading"><div><div className="date-label">MONDAY, SEPTEMBER 28, 2026 <span className="date-line"/></div><h1>{page === 'Overview' ? 'Dashboard' : page}</h1><p>{page === 'Overview' ? role === 'Admin' ? 'Here’s what’s happening at your property today.' : 'Everything you need for a comfortable stay.' : page === 'Rooms' ? 'Keep your spaces organized and up to date.' : page === 'Tenants' ? 'Your residents, all in one place.' : page === 'Rent & payments' || page === 'Payments' ? 'Stay on top of monthly rent and payment activity.' : page === 'Complaints' ? 'Track requests and keep every stay running smoothly.' : page === 'Messages' ? 'A direct line between home and the people who manage it.' : page === 'Activity log' ? 'A timeline of recent activity across your property.' : page === 'Notifications' ? 'Important updates for your property.' : 'Your stay, all in one place.'}</p></div>{role === 'Admin' && page !== 'Complaints' && <button className="primary-btn heading-action" onClick={() => page === 'Rooms' ? openModal('room') : page === 'Tenants' ? openModal('tenant') : page === 'Rent & payments' ? openModal('payment') : openModal('room')}><Icon name="plus"/>{page === 'Rooms' ? 'Add a room' : page === 'Tenants' ? 'Add tenant' : page === 'Complaints' ? 'New complaint' : page === 'Rent & payments' ? 'Record payment' : 'Quick action'}</button>}{role === 'Tenant' && page === 'Complaints' && <button className="primary-btn heading-action" onClick={() => openModal('complaint')}><Icon name="plus"/>New complaint</button>}</div>
- {page === 'Overview' && <><section className="welcome-banner"><div className="welcome-symbol">✦</div><div><h2>{mainTitle}</h2><p>{role === 'Admin' ? 'Your property is looking good. Here’s today’s activity at a glance.' : 'Your room, rent and requests — all in one place.'}</p></div><div className="welcome-decoration">⌂</div></section>{role === 'Admin' ? <><div className="stats-grid"><Stat label="Total rooms" value={String(store.rooms.length).padStart(2,'0')} change={`${occupied} currently occupied`} icon="⌂" tint="blue"/><Stat label="Monthly collection" value={`₹${collected.toLocaleString('en-IN')}`} change="Collected this month" icon="↗" tint="green" trend/><Stat label="Pending rent" value={`₹${pending.toLocaleString('en-IN')}`} change={`${store.payments.filter(p=>p.status==='Pending').length} tenants yet to pay`} icon="◷" tint="amber"/><Stat label="Overdue rent" value={`₹${overdue.toLocaleString('en-IN')}`} change={`${store.payments.filter(p=>p.status==='Overdue').length} payments overdue`} icon="!" tint="red"/></div><div className="overview-grid"><section className="panel collection-panel"><div className="panel-heading"><div><h3>Collection overview</h3><p>Rent collected over the last 6 months</p></div><button className="select-button">Last 6 months <Icon name="down"/></button></div><div className="chart-legend"><span><i className="legend-blue"/>Collected</span><span><i className="legend-pale"/>Pending</span></div><div className="chart-wrap"><div className="chart-y"><span>₹20k</span><span>₹15k</span><span>₹10k</span><span>₹5k</span><span>₹0</span></div><div className="chart"><div className="grid-lines"><i/><i/><i/><i/><i/></div><div className="bars">{[['Apr',52,22],['May',68,18],['Jun',57,29],['Jul',78,15],['Aug',65,23],['Sep',84,12]].map(([m,a,b])=><div className="bar-group" key={m}><div className="bar-pair"><i className="bar collected" style={{height:`${a}%`}}/><i className="bar outstanding" style={{height:`${b}%`}}/></div><span>{m}</span></div>)}</div></div></div><div className="chart-foot"><span><i/>Monthly rent collection is up <b>12.8%</b> compared to last month</span><button onClick={()=>setPage('Rent & payments')}>View report →</button></div></section><section className="panel occupancy-panel"><div className="panel-heading"><div><h3>Room occupancy</h3><p>Current property status</p></div><button className="more-button"><Icon name="more"/></button></div><div className="donut-wrap"><div className="donut"><div><strong>{Math.round(occupied/Math.max(store.rooms.length,1)*100)}%</strong><span>occupied</span></div></div></div><div className="occupancy-legend"><div><span><i className="legend-blue"/>Occupied</span><b>{occupied} rooms</b></div><div><span><i className="legend-light"/>Available</span><b>{store.rooms.filter(r=>r.status==='Available').length} rooms</b></div><div><span><i className="legend-gray"/>Maintenance</span><b>{store.rooms.filter(r=>r.status==='Maintenance').length} rooms</b></div></div><button className="text-link occupancy-link" onClick={()=>setPage('Rooms')}>Manage rooms <span>→</span></button></section></div><div className="bottom-grid"><section className="panel payments-panel"><PanelTitle title="Recent payments" subtitle="A quick look at this month's activity" action="View all" onClick={()=>setPage('Rent & payments')}/><PaymentTable payments={store.payments.slice(0,4)} onPaid={updatePayment} onReceipt={downloadReceipt}/></section><section className="panel activity-panel"><PanelTitle title="Recent activity" subtitle="Latest updates across your property" action="See all" onClick={()=>setPage('Activity log')}/><Activity items={store.activity}/></section></div></> : <><div className="stats-grid tenant-stats"><Stat label="My room" value={store.rooms.find(r=>r.tenant===user?.name)?.number || '102'} change="Deluxe single · 1st floor" icon="⌂" tint="blue"/><Stat label="Monthly rent" value="₹3,000" change="Due by 5th of every month" icon="₹" tint="green"/><Stat label="Payment status" value="Pending" change="September rent is due" icon="◷" tint="amber"/><Stat label="Open requests" value={String(store.complaints.filter(c=>c.tenant===user?.name && c.status!=='Resolved').length || 1)} change="We're on it" icon="▤" tint="red"/></div><div className="tenant-home-grid"><section className="panel my-room-card"><PanelTitle title="Your room" subtitle="A little place to call your own"/><div className="room-visual"><div className="room-light"/><div className="room-scene"><span className="scene-plant">♧</span><div className="scene-window"><i/><i/></div><div className="scene-bed"><div/><i/></div><div className="scene-lamp"/></div></div><div className="room-info"><div><b>Room 102</b><span>Deluxe single · 1st floor</span></div><Badge>Occupied</Badge></div><div className="facility-row">{['WiFi','Attached bath','Bed','Fan'].map(x=><span key={x}>✓ {x}</span>)}</div><button className="text-link" onClick={()=>setPage('My room')}>View room details <span>→</span></button></section><section className="panel rent-card"><PanelTitle title="Rent this month" subtitle="September 2026"/><div className="rent-amount">₹3,000 <span>INR / month</span></div><div className="due-box"><span className="due-icon">◷</span><div><b>Due on 5 October, 2026</b><span>Payment is pending</span></div><Badge>Pending</Badge></div><button className="primary-btn full-btn" onClick={()=>{ const p=store.payments.find(p=>p.name==='Rahul Sharma'); if(p) updatePayment(p); else act('Connect a payment provider to pay securely') }}>Pay rent now <span>→</span></button><button className="text-link centered" onClick={()=>setPage('Payments')}>View payment history</button></section></div><div className="bottom-grid tenant-bottom"><section className="panel payments-panel"><PanelTitle title="Recent payments" subtitle="Your rent history at a glance" action="See history" onClick={()=>setPage('Payments')}/><PaymentTable payments={store.payments.filter(p=>p.name===(user?.name||'Rahul Sharma')).length ? store.payments.filter(p=>p.name===user?.name) : store.payments.slice(0,3)} onReceipt={downloadReceipt}/></section><section className="panel activity-panel"><PanelTitle title="Need a hand?" subtitle="We're here when you need us."/><div className="support-card"><div className="support-icon">✳</div><div><b>Something needs attention?</b><p>Let us know and we'll take care of it.</p></div></div><button className="outline-btn full-btn" onClick={()=>openModal('complaint')}>Submit a complaint <span>→</span></button><button className="text-link centered" onClick={()=>setPage('Messages')}>Chat with property manager</button></section></div></>}</>}
- {page === 'Rooms' && <div className="panel data-panel"><div className="table-toolbar"><div className="table-filter"><span>All rooms</span><Badge>{store.rooms.length}</Badge></div><div className="toolbar-controls"><div className="table-search">⌕<input placeholder="Search rooms..." value={query} onChange={e=>setQuery(e.target.value)}/></div><button className="outline-btn" onClick={()=>act('Filters are up to date')}>☷ Filters</button></div></div><div className="room-grid">{filteredRooms.map((r,i)=><article className="room-card" key={r._id}><div className={`room-card-image image-${i%4}`}><span className="room-no">ROOM {r.number}</span><button onClick={()=>openModal('room',r)} className="room-more"><Icon name="more"/></button><div className="mini-room"><div className="mini-window"/><div className="mini-bed"/><div className="mini-plant">♧</div></div><Badge>{r.status}</Badge></div><div className="room-card-body"><div className="room-card-title"><div><h3>{r.type}</h3><span>{r.status==='Occupied'?r.tenant:'Ready to welcome someone'}</span></div><b>₹{Number(r.rent).toLocaleString('en-IN')}<small>/mo</small></b></div><div className="room-facilities">{(r.facilities||[]).slice(0,4).map(f=><span key={f}>{f}</span>)}</div><div className="room-actions">{r.status==='Occupied'?<button className="outline-btn" onClick={()=>vacateRoom(r)}>Vacate room</button>:r.status==='Available'?<button className="primary-btn" onClick={()=>openModal('assign',r)}>Assign tenant</button>:<button className="outline-btn" onClick={()=>{ setStore(s=>({...s,rooms:s.rooms.map(x=>x._id===r._id?{...x,status:'Available'}:x)})); act(`Room ${r.number} marked available`) }}>Mark available</button>}<button className="icon-button" onClick={()=>openModal('room',r)}>✎</button><button className="icon-button danger-icon" onClick={()=>deleteRoom(r)}>⌫</button></div></div></article>)}</div>{filteredRooms.length===0&&<div className="empty-state">No rooms match your search.</div>}</div>}
- {page === 'Tenants' && <div className="panel data-panel"><div className="table-toolbar"><div className="table-filter"><span>All tenants</span><Badge>{store.tenants.length}</Badge></div><div className="toolbar-controls"><div className="table-search">⌕<input placeholder="Search tenants..." value={query} onChange={e=>setQuery(e.target.value)}/></div><button className="outline-btn" onClick={()=>openModal('tenant')}>＋ Add tenant</button></div></div><TenantTable tenants={store.tenants.filter(t=>`${t.name} ${t.email} ${t.room}`.toLowerCase().includes(query.toLowerCase()))} onAssign={t=>{const r=store.rooms.find(x=>x.number===t.room); if(r)openModal('assign',r); else act('Choose an available room first')}} onRemove={async t=>{await mutate(`users/${t._id}`,'DELETE');setStore(s=>({...s,tenants:s.tenants.filter(x=>x._id!==t._id)}));act('Tenant removed')}}/></div>}
- {(page === 'Rent & payments' || page === 'Payments') && <><div className="stats-grid rent-stats"><Stat label="Collected this month" value={`₹${collected.toLocaleString('en-IN')}`} change="Across all tenants" icon="↗" tint="green"/><Stat label="Pending payments" value={`₹${pending.toLocaleString('en-IN')}`} change="Due this month" icon="◷" tint="amber"/><Stat label="Overdue payments" value={`₹${overdue.toLocaleString('en-IN')}`} change="Needs your attention" icon="!" tint="red"/><Stat label="Total expected" value={`₹${(collected+pending+overdue).toLocaleString('en-IN')}`} change="September 2026" icon="₹" tint="blue"/></div><div className="panel data-panel"><div className="table-toolbar"><div className="table-filter"><span>{role==='Admin'?'All payments':'My payments'}</span><Badge>{store.payments.length}</Badge></div><div className="toolbar-controls"><div className="table-search">⌕<input placeholder="Search payments..." value={query} onChange={e=>setQuery(e.target.value)}/></div><button className="outline-btn" onClick={()=>act('Payment report downloaded')}>↓ Export</button></div></div><PaymentTable payments={store.payments.filter(p=>role==='Admin'||p.name===(user?.name||'Rahul Sharma')).filter(p=>`${p.name} ${p.room} ${p.month} ${p.status}`.toLowerCase().includes(query.toLowerCase()))} onPaid={updatePayment} onReceipt={downloadReceipt} admin={role==='Admin'}/></div></>}
- {page === 'Complaints' && <div className="panel data-panel"><div className="table-toolbar"><div className="table-filter"><span>{role==='Admin'?'All requests':'My requests'}</span><Badge>{store.complaints.length}</Badge></div><div className="toolbar-controls"><div className="table-search">⌕<input placeholder="Search requests..." value={query} onChange={e=>setQuery(e.target.value)}/></div><button className="outline-btn" onClick={()=>openModal('complaint')}>＋ New request</button></div></div><ComplaintTable complaints={store.complaints.filter(c=>(role==='Admin'||c.tenant===(user?.name||'Rahul Sharma'))&&`${c.title} ${c.tenant} ${c.category} ${c.status}`.toLowerCase().includes(query.toLowerCase()))} onStatus={setComplaint} admin={role==='Admin'}/></div>}
- {page === 'Messages' && <div className="panel chat-panel"><div className="chat-sidebar"><div className="chat-list-title"><b>Conversations</b><button>＋</button></div><button className="chat-person active"><div className="user-avatar">{role==='Admin'?'RS':'AM'}</div><div><b>{role==='Admin'?'Rahul Sharma':'Aarav Mehta'}</b><span>{role==='Admin'?'Room 102 · Tenant':'Property manager'}</span></div><i className="chat-unread"/></button><button className="chat-person"><div className="user-avatar avatar-gold">PP</div><div><b>Priya Patel</b><span>Room 201 · Tenant</span></div></button></div><div className="chat-main"><div className="chat-head"><div className="user-avatar">{role==='Admin'?'RS':'AM'}</div><div><b>{role==='Admin'?'Rahul Sharma':'Aarav Mehta'}</b><span><i/> {role==='Admin'?'Room 102 · Active tenant':'Property manager · Online'}</span></div><button className="more-button"><Icon name="more"/></button></div><div className="chat-day">TODAY</div><div className="message-list">{store.messages.map(m=><div className={`message ${m.mine?'mine':''}`} key={m._id}><div className="message-avatar">{m.mine?'AM':'RS'}</div><div><span className="message-author">{m.mine?'You':m.from}</span><div className="message-bubble">{m.body}</div><span className="message-time">{m.time}</span></div></div>)}</div><form className="chat-compose" onSubmit={sendMessage}><button type="button">＋</button><input placeholder="Write a message..." value={chatInput} onChange={e=>setChatInput(e.target.value)}/><button type="button">☺</button><button className="send-btn">↑</button></form></div></div>}
- {page === 'My room' && <div className="my-room-layout"><section className="panel room-detail"><div className="room-detail-hero"><div className="room-detail-img"><div className="sun"/><div className="building"><div className="roof"/><div className="house"><div className="window"/><div className="window"/><div className="door"/></div></div><div className="ground"/></div><Badge>Occupied</Badge></div><div className="room-detail-copy"><div className="eyebrow">YOUR SPACE</div><h2>Room 102</h2><p>Deluxe single · 1st floor · North facing</p><div className="room-specs"><span>Monthly rent <b>₹3,000</b></span><span>Move-in date <b>01 Apr 2026</b></span></div></div></section><section className="panel facility-panel"><h3>Room facilities</h3><p>Everything included in your room.</p><div className="facility-grid">{['High-speed WiFi','Attached bathroom','Wash basin','Single bed','Ceiling fan','Study desk','Wardrobe','Natural light'].map(x=><div key={x}><i>✓</i>{x}</div>)}</div></section></div>}
- {page === 'Activity log' && <div className="panel log-panel"><PanelTitle title="Activity timeline" subtitle="What has been happening lately"/><Activity items={store.activity}/></div>}
- {page === 'Notifications' && <div className="panel log-panel"><PanelTitle title="All notifications" subtitle="Updates from Roomspot Living"/>{store.notifications.map((n,i)=><div className="notification-row" key={i}><span className="notification-symbol">♧</span><div><b>{n.title}</b><span>{n.detail}</span></div><small>{n.time}</small></div>)}</div>}
- </div></main>{mobileNav&&<div className="mobile-shade" onClick={()=>setMobileNav(false)}/>} {toast&&<div className="toast"><span>✓</span>{toast}</div>}
- {modal&&<div className="modal-backdrop" onClick={e=>e.target===e.currentTarget&&setModal('')}><div className="modal"><div className="modal-head"><div><div className="eyebrow">ROOMSPOT WORKSPACE</div><h2>{modal==='room'?selected?'Edit room':'Add a room':modal==='assign'?'Assign a tenant':modal==='tenant'?'Add a tenant':modal==='complaint'?'Submit a request':modal==='payment'?'Record a payment':'Your profile'}</h2></div><button onClick={()=>setModal('')}>×</button></div>{modal==='room'&&<form onSubmit={saveRoom} className="modal-form"><label>Room number<input required placeholder="e.g. 102" value={form.number||''} onChange={e=>setForm({...form,number:e.target.value})}/></label><label>Room type<select value={form.type||'Standard single'} onChange={e=>setForm({...form,type:e.target.value})}>{['Standard single','Deluxe single','Deluxe double','Shared room'].map(x=><option key={x}>{x}</option>)}</select></label><label>Monthly rent (₹)<input required type="number" min="0" value={form.rent||''} onChange={e=>setForm({...form,rent:e.target.value})}/></label><label>Status<select value={form.status||'Available'} onChange={e=>setForm({...form,status:e.target.value})}>{['Available','Occupied','Maintenance'].map(x=><option key={x}>{x}</option>)}</select></label><label className="wide">Facilities <input placeholder="WiFi, Attached bath, Fan, Bed" value={Array.isArray(form.facilities)?form.facilities.join(', '):form.facilities||''} onChange={e=>setForm({...form,facilities:e.target.value})}/></label><div className="modal-actions"><button type="button" className="outline-btn" onClick={()=>setModal('')}>Cancel</button><button className="primary-btn">{selected?'Save changes':'Add room'}</button></div></form>}{modal==='assign'&&<form onSubmit={assignRoom} className="modal-form"><div className="modal-room-note">Room {selected?.number} · {selected?.type}<b>₹{Number(selected?.rent).toLocaleString('en-IN')} / month</b></div><label className="wide">Tenant name<input required placeholder="Search or enter tenant name" value={form.tenantName||''} onChange={e=>setForm({...form,tenantName:e.target.value,tenantId:store.tenants.find(t=>t.name===e.target.value)?._id})}/></label><label className="wide">Monthly rent (₹)<input type="number" value={form.rent||selected?.rent||''} onChange={e=>setForm({...form,rent:e.target.value})}/></label><div className="modal-actions"><button type="button" className="outline-btn" onClick={()=>setModal('')}>Cancel</button><button className="primary-btn">Assign room</button></div></form>}{modal==='tenant'&&<form onSubmit={addTenant} className="modal-form"><label>Full name<input required value={form.name||''} onChange={e=>setForm({...form,name:e.target.value})}/></label><label>Email address<input required type="email" value={form.email||''} onChange={e=>setForm({...form,email:e.target.value})}/></label><label>Phone number<input placeholder="+91 98765 43210" value={form.phone||''} onChange={e=>setForm({...form,phone:e.target.value})}/></label><label>Room<select value={form.room||''} onChange={e=>setForm({...form,room:e.target.value})}><option value="">Unassigned</option>{store.rooms.filter(r=>r.status==='Available').map(r=><option key={r._id} value={r.number}>{r.number} · ₹{r.rent}/mo</option>)}</select></label><label className="wide">Temporary password<input required minLength="6" type="password" value={form.password||''} onChange={e=>setForm({...form,password:e.target.value})}/></label><div className="modal-actions"><button type="button" className="outline-btn" onClick={()=>setModal('')}>Cancel</button><button className="primary-btn">Add tenant</button></div></form>}{modal==='complaint'&&<form onSubmit={addComplaint} className="modal-form"><label className="wide">What needs attention?<input required placeholder="Briefly describe the issue" value={form.title||''} onChange={e=>setForm({...form,title:e.target.value})}/></label><label>Category<select value={form.category||'Maintenance'} onChange={e=>setForm({...form,category:e.target.value})}>{['Water','Electricity','Bathroom','Cleaning','Maintenance','Other'].map(x=><option key={x}>{x}</option>)}</select></label>{role==='Admin'&&<label>Room<input value={form.room||''} onChange={e=>setForm({...form,room:e.target.value})} placeholder="Room number"/></label>}<label className="wide">Details<textarea rows="3" placeholder="Add any details that will help us fix this..." value={form.description||''} onChange={e=>setForm({...form,description:e.target.value})}/></label><div className="modal-actions"><button type="button" className="outline-btn" onClick={()=>setModal('')}>Cancel</button><button className="primary-btn">Submit request</button></div></form>}{modal==='payment'&&<form onSubmit={async e=>{e.preventDefault();const p={...form,amount:Number(form.amount),_id:`p${Date.now()}`,status:'Paid',method:form.method||'UPI'}; await mutate('payments','POST',p);setStore(s=>({...s,payments:[p,...s.payments]}));setModal('');act('Payment recorded')}} className="modal-form"><label>Tenant<select required value={form.name||''} onChange={e=>setForm({...form,name:e.target.value,room:store.tenants.find(t=>t.name===e.target.value)?.room||''})}><option value="">Select tenant</option>{store.tenants.map(t=><option key={t._id}>{t.name}</option>)}</select></label><label>Room<input value={form.room||''} onChange={e=>setForm({...form,room:e.target.value})}/></label><label>Month<input required placeholder="September 2026" value={form.month||''} onChange={e=>setForm({...form,month:e.target.value})}/></label><label>Amount (₹)<input required type="number" value={form.amount||''} onChange={e=>setForm({...form,amount:e.target.value})}/></label><label>Payment method<select value={form.method||'UPI'} onChange={e=>setForm({...form,method:e.target.value})}>{['UPI','Cash','Bank transfer','Card'].map(x=><option key={x}>{x}</option>)}</select></label><div className="modal-actions"><button type="button" className="outline-btn" onClick={()=>setModal('')}>Cancel</button><button className="primary-btn">Record payment</button></div></form>}{modal==='profile'&&<div className="profile-modal"><div className="user-avatar">{user?.name?.slice(0,1)||'A'}</div><b>{user?.name||'Aarav Mehta'}</b><span>{user?.email||'admin@maish.com'}</span><button className="outline-btn" onClick={()=>{setModal('');logOut()}}>Sign out</button></div>}</div></div>}</div>
+  const handleChange = (event) => {
+    const { name, value } = event.target
+    setForm((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const handleSubmit = (event) => {
+    event.preventDefault()
+    const currentUser = {
+      name: form.fullName || (isLogin ? 'Demo User' : 'New User'),
+      email: form.email,
+      role: form.email.toLowerCase().includes('admin') ? 'admin' : 'tenant',
+    }
+    onSubmit(currentUser)
+  }
+
+  return (
+    <div className="auth-page-shell">
+      <div className="auth-card">
+        <div className="auth-logo" aria-label="RoomSpot logo">
+          <div className="brand-mark">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1v-9.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <span>RoomSpot</span>
+        </div>
+
+        <div className="auth-header">
+          <div className="auth-kicker">{isLogin ? 'Welcome back' : 'Create account'}</div>
+          <h2>{isLogin ? 'Sign in to RoomSpot' : 'Join RoomSpot'}</h2>
+        </div>
+
+        <div className="auth-tabs">
+          <button
+            type="button"
+            className={isLogin ? 'active' : ''}
+            onClick={() => navigate('/login')}
+          >
+            Login
+          </button>
+          <button
+            type="button"
+            className={!isLogin ? 'active' : ''}
+            onClick={() => navigate('/register')}
+          >
+            Register
+          </button>
+        </div>
+
+        <form className="auth-form" onSubmit={handleSubmit}>
+          {!isLogin && (
+            <label>
+              Full name
+              <input
+                type="text"
+                name="fullName"
+                value={form.fullName}
+                onChange={handleChange}
+                placeholder="e.g. Rahul Sharma"
+                required
+              />
+            </label>
+          )}
+
+          <label>
+            Email address
+            <input
+              type="email"
+              name="email"
+              value={form.email}
+              onChange={handleChange}
+              placeholder="you@example.com"
+              required
+            />
+          </label>
+
+          <label>
+            Password
+            <input
+              type="password"
+              name="password"
+              value={form.password}
+              onChange={handleChange}
+              placeholder="Enter your password"
+              required
+            />
+          </label>
+
+          <button type="submit" className="auth-submit-btn">
+            {isLogin ? 'Login' : 'Create account'}
+          </button>
+        </form>
+
+        <button type="button" className="auth-back-home" onClick={() => navigate('/')}>
+          Back to Home
+        </button>
+      </div>
+    </div>
+  )
 }
-function Stat({label,value,change,icon,tint,trend}){return <div className="stat-card"><div className="stat-top"><span>{label}</span><i className={`stat-icon ${tint}`}>{icon}</i></div><strong>{value}</strong><div className="stat-change">{trend&&<i>↗</i>}{change}</div></div>}
-function PanelTitle({title,subtitle,action,onClick}){return <div className="panel-heading"><div><h3>{title}</h3><p>{subtitle}</p></div>{action&&<button className="text-link" onClick={onClick}>{action} →</button>}</div>}
-function PaymentTable({payments,onPaid,onReceipt,admin=true}){return <div className="table-scroll"><table><thead><tr><th>{admin?'TENANT':'MONTH'}</th>{admin&&<th>ROOM</th>}<th>MONTH</th><th>AMOUNT</th><th>STATUS</th><th>{admin?'METHOD':'RECEIPT'}</th>{admin&&<th/>}</tr></thead><tbody>{payments.map(p=><tr key={p._id}><td><div className="table-user"><div className="user-avatar tiny">{(p.name||'R').split(' ').map(x=>x[0]).join('')}</div><b>{admin?p.name:p.month}</b></div>{admin&&<span className="mobile-month">{p.month}</span>}</td>{admin&&<td>Room {p.room}</td>}<td>{admin?p.month:p.dueDate}</td><td className="amount-cell">₹{Number(p.amount).toLocaleString('en-IN')}</td><td><Badge>{p.status}</Badge></td><td>{admin?p.method||'—':<button className="receipt-link" onClick={()=>onReceipt?.(p)}>↓ Receipt</button>}</td>{admin&&<td><button className="row-action" title="Toggle payment status" onClick={()=>onPaid?.(p)}>···</button></td>}</tr>)}</tbody></table>{payments.length===0&&<div className="empty-state">No payments found.</div>}</div>}
-function TenantTable({tenants,onAssign,onRemove}){return <div className="table-scroll"><table><thead><tr><th>TENANT</th><th>ROOM</th><th>STATUS</th><th>MONTHLY RENT</th><th>JOINED</th><th/></tr></thead><tbody>{tenants.map(t=><tr key={t._id}><td><div className="table-user"><div className="user-avatar tiny">{t.name.split(' ').map(x=>x[0]).join('')}</div><div><b>{t.name}</b><small>{t.email}</small></div></div></td><td>{t.room?`Room ${t.room}`:<span className="muted">Unassigned</span>}</td><td><Badge>{t.status||'Active'}</Badge></td><td>₹{Number(t.rent||3000).toLocaleString('en-IN')}</td><td>Apr 01, 2026</td><td><button className="row-action" onClick={()=>t.room?onRemove(t):onAssign(t)}>···</button></td></tr>)}</tbody></table>{tenants.length===0&&<div className="empty-state">No tenants found.</div>}</div>}
-function ComplaintTable({complaints,onStatus,admin}){return <div className="table-scroll"><table><thead><tr><th>REQUEST</th>{admin&&<th>TENANT</th>}<th>CATEGORY</th><th>ROOM</th><th>DATE</th><th>STATUS</th><th/></tr></thead><tbody>{complaints.map(c=><tr key={c._id}><td><div className="request-title"><i className={`request-icon ${c.category.toLowerCase()}`}>{c.category==='Electricity'?'ϟ':c.category==='Cleaning'?'✳':'⌂'}</i><b>{c.title}</b></div></td>{admin&&<td>{c.tenant}</td>}<td>{c.category}</td><td>Room {c.room}</td><td>{c.date}</td><td><button className="status-button" onClick={()=>admin&&onStatus(c)}><Badge>{c.status}</Badge></button></td><td><button className="row-action">···</button></td></tr>)}</tbody></table>{complaints.length===0&&<div className="empty-state">No requests found.</div>}</div>}
-function Activity({items}){return <div className="activity-list">{items.map((i,n)=><div className="activity-item" key={n}><div className={`activity-icon activity-${n%3}`}>{i.icon||'◷'}</div><div><b>{i.action}</b><span>{i.time}</span></div></div>)}</div>}
-export default App
+
+function DashboardPage({ role, user, onLogout }) {
+  const isAdmin = role === 'admin'
+  const navItems = isAdmin
+    ? ['Overview', 'Rooms', 'Tenants', 'Rent & payments', 'Complaints', 'Messages']
+    : ['Overview', 'My room', 'Payments', 'Complaints', 'Messages']
+
+  const [activeSection, setActiveSection] = useState('Overview')
+
+  const quickActions = isAdmin
+    ? [
+        'Send rent reminder',
+        'Review new inquiries',
+        'Schedule inspection',
+        'Publish listing',
+      ]
+    : [
+        'Pay rent',
+        'Request maintenance',
+        'Chat with manager',
+        'Update profile',
+      ]
+
+  const trendData = isAdmin
+    ? [72, 88, 80, 95, 100, 84, 92]
+    : [58, 70, 68, 82, 90, 76, 85]
+
+  const [rooms, setRooms] = useState([
+    { id: 1, name: 'Room 101', type: 'Private room', status: 'Occupied', rent: '₹12,000', occupancy: '92%' },
+    { id: 2, name: 'Room 201', type: '1BHK', status: 'Available', rent: '₹18,500', occupancy: '100%' },
+    { id: 3, name: 'PG Floor', type: 'Shared room', status: 'Occupied', rent: '₹7,500', occupancy: '88%' },
+  ])
+
+  const [tenants, setTenants] = useState([
+    { id: 1, name: 'Aisha Khan', status: 'Verified', lease: '2 months', room: 'Room 101' },
+    { id: 2, name: 'Rohit Verma', status: 'Pending', lease: '1 month', room: 'Room 205' },
+    { id: 3, name: 'Neha Patel', status: 'Verified', lease: '5 months', room: 'PG Floor' },
+  ])
+
+  const [payments, setPayments] = useState([
+    { id: 1, name: 'Monthly rent', owner: 'Aisha Khan', amount: '₹12,000', due: 'Paid', tag: 'success' },
+    { id: 2, name: 'Security deposit', owner: 'Rohit Verma', amount: '₹8,000', due: 'Pending', tag: 'warning' },
+    { id: 3, name: 'Maintenance', owner: 'Neha Patel', amount: '₹1,200', due: 'Paid', tag: 'success' },
+  ])
+
+  const [complaints, setComplaints] = useState([
+    { id: 1, title: 'Water leakage', owner: 'Aisha Khan', status: 'Open', priority: 'High' },
+    { id: 2, title: 'Fan repair', owner: 'Rohit Verma', status: 'In review', priority: 'Medium' },
+    { id: 3, title: 'Wi-Fi issue', owner: 'Neha Patel', status: 'Resolved', priority: 'Low' },
+  ])
+
+  const [messages, setMessages] = useState([
+    { id: 1, from: 'Owner', preview: 'The room inspection is scheduled for Friday.', unread: 2 },
+    { id: 2, from: 'Support', preview: 'Your rent payment has been recorded.', unread: 0 },
+    { id: 3, from: 'Manager', preview: 'Your complaint has been assigned to the team.', unread: 1 },
+  ])
+
+  const stats = isAdmin
+    ? [
+        { label: 'Total rooms', value: '128', trend: '+8% this month' },
+        { label: 'Occupancy', value: '92%', trend: 'Healthy demand' },
+        { label: 'Collections', value: '₹4.8L', trend: '+12% vs last month' },
+        { label: 'Complaints', value: '14', trend: '7 open issues' },
+      ]
+    : [
+        { label: 'My room', value: 'Room 102', trend: 'Ready to move in' },
+        { label: 'Rent due', value: '₹3,000', trend: 'Due in 6 days' },
+        { label: 'Requests', value: '3', trend: '1 pending review' },
+        { label: 'Profile', value: 'Verified', trend: 'Lease active' },
+      ]
+
+  const markPaid = (id) => {
+    setPayments((prev) => prev.map((item) => (item.id === id ? { ...item, due: 'Paid', tag: 'success' } : item)))
+  }
+
+  const resolveComplaint = (id) => {
+    setComplaints((prev) => prev.map((item) => (item.id === id ? { ...item, status: 'Resolved' } : item)))
+  }
+
+  const toggleRoomStatus = (id) => {
+    setRooms((prev) => prev.map((room) => {
+      if (room.id !== id) return room
+      return {
+        ...room,
+        status: room.status === 'Available' ? 'Occupied' : 'Available',
+      }
+    }))
+  }
+
+  const readMessage = (id) => {
+    setMessages((prev) => prev.map((message) => (message.id === id ? { ...message, unread: 0 } : message)))
+  }
+
+  const renderSection = () => {
+    if (activeSection === 'Overview') {
+      return (
+        <>
+          <div className="stats-grid">
+            {stats.map((stat) => (
+              <article key={stat.label} className="stat-card">
+                <div className="stat-top">
+                  <span>{stat.label}</span>
+                  <i className="stat-icon">↗</i>
+                </div>
+                <strong>{stat.value}</strong>
+                <div className="stat-change">{stat.trend}</div>
+              </article>
+            ))}
+          </div>
+
+          <div className="overview-layout">
+            <div className="info-panel chart-panel">
+              <div className="panel-heading">
+                <div>
+                  <h3>{isAdmin ? 'Performance overview' : 'Your trend'}</h3>
+                  <p>{isAdmin ? 'Revenue and occupancy growth' : 'Your stay and payment trend'}</p>
+                </div>
+              </div>
+
+              <div className="chart-bars" aria-label="Trend chart">
+                {trendData.map((value, index) => (
+                  <div key={index} className="chart-column">
+                    <div className="chart-bar" style={{ height: `${value}%` }} />
+                    <span>{['M', 'T', 'W', 'T', 'F', 'S', 'S'][index]}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="info-panel quick-panel">
+              <div className="panel-heading">
+                <div>
+                  <h3>Quick actions</h3>
+                  <p>Recommended next steps</p>
+                </div>
+              </div>
+
+              <div className="quick-actions-list">
+                {quickActions.map((action, index) => (
+                  <button key={action} type="button" className="quick-action-item">
+                    <span className="quick-icon">{index + 1}</span>
+                    {action}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="panel-grid">
+            <div className="info-panel">
+              <div className="panel-heading">
+                <div>
+                  <h3>Recent activity</h3>
+                  <p>What has been happening lately</p>
+                </div>
+              </div>
+              <ul className="activity-list">
+                <li>New tenant onboarding completed.</li>
+                <li>Maintenance check scheduled for Room 201.</li>
+                <li>Rent collection updated successfully.</li>
+              </ul>
+            </div>
+
+            <div className="info-panel">
+              <div className="panel-heading">
+                <div>
+                  <h3>{isAdmin ? 'Property insights' : 'Your stay'}</h3>
+                  <p>{isAdmin ? 'Performance snapshot' : 'Booking snapshot'}</p>
+                </div>
+              </div>
+              <ul className="activity-list">
+                <li>{isAdmin ? 'Occupancy remains strong.' : 'Your room is well maintained.'}</li>
+                <li>{isAdmin ? '2 premium rooms are trending.' : 'Your rental payment is on track.'}</li>
+                <li>{isAdmin ? 'Owner response time is under 3 hours.' : 'Support team is available for help.'}</li>
+              </ul>
+            </div>
+          </div>
+        </>
+      )
+    }
+
+    if ((activeSection === 'Rooms' || activeSection === 'My room') && isAdmin) {
+      return (
+        <div className="content-card">
+          <div className="content-header">
+            <div>
+              <h3>Room availability</h3>
+              <p>Live property overview</p>
+            </div>
+            <button type="button" className="action-button primary">Add room</button>
+          </div>
+
+          <div className="data-table">
+            <div className="table-head">
+              <span>Room</span>
+              <span>Type</span>
+              <span>Rent</span>
+              <span>Status</span>
+              <span>Action</span>
+            </div>
+            {rooms.map((room) => (
+              <div className="table-row" key={room.id}>
+                <span>{room.name}</span>
+                <span>{room.type}</span>
+                <span>{room.rent}</span>
+                <span><em className={`status-badge ${room.status === 'Available' ? 'success' : 'neutral'}`}>{room.status}</em></span>
+                <span><button type="button" className="action-button small" onClick={() => toggleRoomStatus(room.id)}>{room.status === 'Available' ? 'Mark occupied' : 'Mark available'}</button></span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )
+    }
+
+    if (activeSection === 'My room' && !isAdmin) {
+      return (
+        <div className="content-card">
+          <div className="content-header">
+            <div>
+              <h3>Your room</h3>
+              <p>Stay and lease details</p>
+            </div>
+            <button type="button" className="action-button primary">Request support</button>
+          </div>
+
+          <div className="room-summary">
+            <div className="room-detail">
+              <label>Room</label>
+              <strong>Room 102</strong>
+            </div>
+            <div className="room-detail">
+              <label>Monthly rent</label>
+              <strong>₹3,000</strong>
+            </div>
+            <div className="room-detail">
+              <label>Move-in status</label>
+              <strong>Active</strong>
+            </div>
+            <div className="room-detail">
+              <label>Maintenance</label>
+              <strong>Scheduled</strong>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    if (activeSection === 'Tenants' && isAdmin) {
+      return (
+        <div className="content-card">
+          <div className="content-header">
+            <div>
+              <h3>Tenant records</h3>
+              <p>Verification and stay details</p>
+            </div>
+            <button type="button" className="action-button primary">Add tenant</button>
+          </div>
+
+          <div className="data-table">
+            <div className="table-head">
+              <span>Name</span>
+              <span>Room</span>
+              <span>Lease</span>
+              <span>Status</span>
+            </div>
+            {tenants.map((tenant) => (
+              <div className="table-row" key={tenant.id}>
+                <span>{tenant.name}</span>
+                <span>{tenant.room}</span>
+                <span>{tenant.lease}</span>
+                <span><em className={`status-badge ${tenant.status === 'Verified' ? 'success' : 'warning'}`}>{tenant.status}</em></span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )
+    }
+
+    if ((activeSection === 'Payments' || activeSection === 'Rent & payments') && !isAdmin) {
+      return (
+        <div className="content-card">
+          <div className="content-header">
+            <div>
+              <h3>Payments</h3>
+              <p>Current dues and receipts</p>
+            </div>
+          </div>
+
+          <div className="data-table">
+            <div className="table-head">
+              <span>Type</span>
+              <span>Amount</span>
+              <span>Status</span>
+              <span>Action</span>
+            </div>
+            {payments.map((payment) => (
+              <div className="table-row" key={payment.id}>
+                <span>{payment.name}</span>
+                <span>{payment.amount}</span>
+                <span><em className={`status-badge ${payment.tag === 'success' ? 'success' : 'warning'}`}>{payment.due}</em></span>
+                <span>
+                  {payment.due === 'Pending' ? (
+                    <button type="button" className="action-button small" onClick={() => markPaid(payment.id)}>Mark paid</button>
+                  ) : (
+                    <span className="muted-label">Completed</span>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )
+    }
+
+    if (activeSection === 'Rent & payments' && isAdmin) {
+      return (
+        <div className="content-card">
+          <div className="content-header">
+            <div>
+              <h3>Collections</h3>
+              <p>Payment summary</p>
+            </div>
+          </div>
+
+          <div className="data-table">
+            <div className="table-head">
+              <span>Owner</span>
+              <span>Type</span>
+              <span>Amount</span>
+              <span>Status</span>
+              <span>Action</span>
+            </div>
+            {payments.map((payment) => (
+              <div className="table-row" key={payment.id}>
+                <span>{payment.owner}</span>
+                <span>{payment.name}</span>
+                <span>{payment.amount}</span>
+                <span><em className={`status-badge ${payment.tag === 'success' ? 'success' : 'warning'}`}>{payment.due}</em></span>
+                <span>
+                  {payment.due === 'Pending' ? (
+                    <button type="button" className="action-button small" onClick={() => markPaid(payment.id)}>Confirm</button>
+                  ) : (
+                    <span className="muted-label">Done</span>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )
+    }
+
+    if (activeSection === 'Complaints') {
+      return (
+        <div className="content-card">
+          <div className="content-header">
+            <div>
+              <h3>Complaints</h3>
+              <p>{isAdmin ? 'Support queue' : 'Your reported issues'}</p>
+            </div>
+            <button type="button" className="action-button primary">New complaint</button>
+          </div>
+
+          <div className="task-list">
+            {complaints.map((complaint) => (
+              <div className="task-item" key={complaint.id}>
+                <div>
+                  <h4>{complaint.title}</h4>
+                  <p>{complaint.owner}</p>
+                </div>
+                <div className="task-meta">
+                  <span className="mini-tag">{complaint.priority}</span>
+                  <span className={`status-badge ${complaint.status === 'Resolved' ? 'success' : complaint.status === 'Open' ? 'warning' : 'neutral'}`}>{complaint.status}</span>
+                  {complaint.status !== 'Resolved' && (
+                    <button type="button" className="action-button small" onClick={() => resolveComplaint(complaint.id)}>Resolve</button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )
+    }
+
+    if (activeSection === 'Messages') {
+      return (
+        <div className="content-card">
+          <div className="content-header">
+            <div>
+              <h3>Messages</h3>
+              <p>{isAdmin ? 'Owner and tenant updates' : 'Recent updates from your manager'}</p>
+            </div>
+          </div>
+
+          <div className="task-list">
+            {messages.map((message) => (
+              <div className="task-item" key={message.id}>
+                <div>
+                  <h4>{message.from}</h4>
+                  <p>{message.preview}</p>
+                </div>
+                <div className="task-meta">
+                  {message.unread > 0 && <span className="unread-pill">{message.unread}</span>}
+                  <button type="button" className="action-button small" onClick={() => readMessage(message.id)}>Reply</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )
+    }
+
+    return null
+  }
+
+  return (
+    <div className="dashboard-shell">
+      <aside className="dashboard-sidebar">
+        <div className="dashboard-sidebar-inner">
+          <div className="dashboard-brand">
+            <div className="brand-mark compact-mark">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1v-9.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <div>
+              <strong>RoomSpot</strong>
+              <span>{isAdmin ? 'Admin panel' : 'Tenant portal'}</span>
+            </div>
+          </div>
+
+          <div className="property-select">
+            <div className="property-avatar">{(user?.name || 'RS').slice(0, 1).toUpperCase()}</div>
+            <div>
+              <b>{isAdmin ? 'RoomSpot Living' : 'My residence'}</b>
+              <span>{isAdmin ? 'Property workspace' : 'Stay summary'}</span>
+            </div>
+            <span className="caret">⌄</span>
+          </div>
+
+          <div className="nav-caption">WORKSPACE</div>
+          <nav className="dashboard-nav">
+            {navItems.map((item) => (
+              <button
+                key={item}
+                type="button"
+                className={`nav-item ${activeSection === item ? 'active' : ''}`}
+                onClick={() => setActiveSection(item)}
+              >
+                <span>{item === 'Overview' ? '▦' : item === 'Rooms' || item === 'My room' ? '⌂' : item === 'Payments' || item === 'Rent & payments' ? '₹' : item === 'Messages' ? '▢' : item === 'Complaints' ? '▤' : '♙'}</span>
+                {item}
+              </button>
+            ))}
+          </nav>
+
+          <div className="sidebar-bottom">
+            <div className="sidebar-card">
+              <h4>{isAdmin ? 'Property status' : 'Stay status'}</h4>
+              <p>{isAdmin ? '8 new inquiries this week.' : 'All documents verified and active.'}</p>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <main className="dashboard-main">
+        <header className="dashboard-topbar">
+          <div className="topbar-left">
+            <button type="button" className="menu-btn" aria-label="Open menu">☰</button>
+            <div className="breadcrumb">Workspace <span>/</span> <b>{isAdmin ? 'Admin dashboard' : 'Dashboard'}</b></div>
+          </div>
+
+          <div className="topbar-actions">
+            <button type="button" className="topbar-button">Notifications</button>
+            <div className="profile-pill">
+              <span>{(user?.name || 'User').slice(0, 2).toUpperCase()}</span>
+              <div>
+                <strong>{user?.name || 'Guest User'}</strong>
+                <small>{isAdmin ? 'Administrator' : 'Tenant'}</small>
+              </div>
+            </div>
+            <button type="button" className="logout-button" onClick={onLogout}>Logout</button>
+          </div>
+        </header>
+
+        <section className="dashboard-content">
+          <div className="welcome-banner">
+            <div className="welcome-symbol">✦</div>
+            <div>
+              <h2>{isAdmin ? 'Good morning, Admin 👋' : `Welcome home, ${user?.name?.split(' ')[0] || 'User'} 👋`}</h2>
+              <p>{isAdmin ? 'Your property portfolio is performing well today.' : 'Your room, rent and requests are all in one place.'}</p>
+            </div>
+            <div className="welcome-decoration">⌂</div>
+          </div>
+
+          {isAdmin ? (
+            <div className="dashboard-summary-strip">
+              <div className="summary-pill accent">
+                <span>Today</span>
+                <strong>24 leads</strong>
+              </div>
+              <div className="summary-pill">
+                <span>Occupancy</span>
+                <strong>92%</strong>
+              </div>
+              <div className="summary-pill">
+                <span>Collections</span>
+                <strong>₹4.8L</strong>
+              </div>
+            </div>
+          ) : (
+            <div className="dashboard-summary-strip">
+              <div className="summary-pill accent">
+                <span>Lease</span>
+                <strong>Active</strong>
+              </div>
+              <div className="summary-pill">
+                <span>Rent due</span>
+                <strong>₹3,000</strong>
+              </div>
+              <div className="summary-pill">
+                <span>Support</span>
+                <strong>On call</strong>
+              </div>
+            </div>
+          )}
+
+          {renderSection()}
+        </section>
+      </main>
+    </div>
+  )
+}
+
+function ProtectedRoute({ isAuthenticated, allowedRole, userRole, children }) {
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />
+  }
+
+  if (allowedRole && userRole !== allowedRole) {
+    return <Navigate to={userRole === 'admin' ? '/admin/dashboard' : '/dashboard'} replace />
+  }
+
+  return children
+}
+
+function AppRoutes({ auth, onLogin, onLogout }) {
+  const isAuthenticated = Boolean(auth?.user)
+  const userRole = auth?.role || null
+
+  return (
+    <Routes>
+      <Route
+        path="/"
+        element={
+          <Home
+            onLogin={() => window.location.assign('/login')}
+            onRegister={() => window.location.assign('/register')}
+            onListProperty={() => window.location.assign('/register')}
+          />
+        }
+      />
+      <Route path="/portfolio" element={<PortfolioPage />} />
+      <Route path="/login" element={isAuthenticated ? <Navigate to={userRole === 'admin' ? '/admin/dashboard' : '/dashboard'} replace /> : <AuthPage mode="login" onSubmit={onLogin} />} />
+      <Route path="/register" element={isAuthenticated ? <Navigate to={userRole === 'admin' ? '/admin/dashboard' : '/dashboard'} replace /> : <AuthPage mode="register" onSubmit={onLogin} />} />
+
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} allowedRole="tenant" userRole={userRole}>
+            <DashboardPage role="tenant" user={auth.user} onLogout={onLogout} />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/admin/dashboard"
+        element={
+          <ProtectedRoute isAuthenticated={isAuthenticated} allowedRole="admin" userRole={userRole}>
+            <DashboardPage role="admin" user={auth.user} onLogout={onLogout} />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  )
+}
+
+export default function App() {
+  const [auth, setAuth] = useState(readAuth)
+
+  useEffect(() => {
+    document.title = 'RoomSpot | Find Rooms & Rentals'
+  }, [])
+
+  useEffect(() => {
+    localStorage.setItem(AUTH_KEY, JSON.stringify(auth))
+  }, [auth])
+
+  const handleAuth = (user) => {
+    const nextAuth = {
+      user,
+      role: user.role,
+    }
+    setAuth(nextAuth)
+
+    if (user.role === 'admin') {
+      window.location.assign('/admin/dashboard')
+      return
+    }
+
+    window.location.assign('/dashboard')
+  }
+
+  const handleLogout = () => {
+    setAuth({ user: null, role: null })
+    window.location.assign('/')
+  }
+
+  return (
+    <BrowserRouter>
+      <AppRoutes auth={auth} onLogin={handleAuth} onLogout={handleLogout} />
+    </BrowserRouter>
+  )
+}
