@@ -1,0 +1,3 @@
+import mongoose from 'mongoose'
+const roomSchema=new mongoose.Schema({ number:{type:String,required:true,unique:true,trim:true}, rent:{type:Number,required:true,min:0}, type:{type:String,default:'Standard single'}, bathroom:{type:Boolean,default:false}, washBasin:{type:Boolean,default:false}, wifi:{type:Boolean,default:false}, bed:{type:Boolean,default:true}, fan:{type:Boolean,default:true}, ac:{type:Boolean,default:false}, facilities:[String], otherFacilities:[String], status:{type:String,enum:['Available','Occupied','Maintenance'],default:'Available'}, tenant:{type:mongoose.Schema.Types.ObjectId,ref:'User',default:null} },{timestamps:true})
+export default mongoose.model('Room',roomSchema)
