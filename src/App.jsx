@@ -2,10 +2,37 @@ import { useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import Home from './pages/Home'
 import PortfolioPage from './pages/PortfolioPage'
+import { getApiBaseCandidates } from './lib/apiConfig'
 import './App.css'
 
 const AUTH_KEY = 'roomspot-auth'
-const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || `${window.location.protocol}//${window.location.hostname}:5000/api`).replace(/\/$/, '')
+const API_BASES = getApiBaseCandidates()
+const API_BASE = API_BASES[0]
+
+async function fetchWithApiFallback(path, options = {}) {
+  const requestOptions = options || {}
+  const candidates = API_BASES.length ? API_BASES : ['/api']
+
+  let lastError
+  for (const base of candidates) {
+    const url = base.startsWith('http') ? `${base}${path}` : `${base}${path}`
+
+    try {
+      const response = await fetch(url, requestOptions)
+      if (response.ok || response.status >= 400) {
+        return response
+      }
+    } catch (error) {
+      lastError = error
+    }
+  }
+
+  if (lastError) {
+    throw lastError
+  }
+
+  throw new Error('No API endpoint available')
+}
 
 function readAuth() {
   try {
@@ -202,7 +229,7 @@ function DashboardPage({ role, user, onLogout }) {
 
   const fetchAdminUpi = async () => {
     try {
-      const response = await fetch(`${API_BASE}/settings/payment`)
+      const response = await fetchWithApiFallback('/settings/payment')
       if (!response.ok) {
         return
       }
@@ -228,11 +255,11 @@ function DashboardPage({ role, user, onLogout }) {
 
     const loadDashboardData = async () => {
       const requests = [
-        fetch(`${API_BASE}/users/stays`, { headers }),
-        fetch(`${API_BASE}/payments`, { headers }),
+        fetchWithApiFallback('/users/stays', { headers }),
+        fetchWithApiFallback('/payments', { headers }),
       ]
       if (isAdmin) {
-        requests.push(fetch(`${API_BASE}/users`, { headers }), fetch(`${API_BASE}/rooms`, { headers }))
+        requests.push(fetchWithApiFallback('/users', { headers }), fetchWithApiFallback('/rooms', { headers }))
       }
 
       try {
@@ -342,7 +369,7 @@ function DashboardPage({ role, user, onLogout }) {
   const markPaid = async (id) => {
     const token = readAuth().token
     try {
-      const response = await fetch(`${API_BASE}/payments/${id}`, {
+      const response = await fetchWithApiFallback(`/payments/${id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -371,7 +398,7 @@ function DashboardPage({ role, user, onLogout }) {
 
     const token = readAuth().token
     try {
-      const response = await fetch(`${API_BASE}/payments/${payment._id}/pay`, {
+      const response = await fetchWithApiFallback(`/payments/${payment._id}/pay`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -415,7 +442,7 @@ function DashboardPage({ role, user, onLogout }) {
     const token = readAuth().token
 
     try {
-      const response = await fetch(`${API_BASE}/settings/payment`, {
+      const response = await fetchWithApiFallback('/settings/payment', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -450,7 +477,7 @@ function DashboardPage({ role, user, onLogout }) {
     const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
 
     try {
-      const response = await fetch(`${API_BASE}/users`, {
+      const response = await fetchWithApiFallback('/users', {
         method: 'POST',
         headers,
         body: JSON.stringify(tenantForm),
@@ -462,7 +489,7 @@ function DashboardPage({ role, user, onLogout }) {
       }
 
       if (tenantForm.roomId) {
-        const assignResponse = await fetch(`${API_BASE}/rooms/${tenantForm.roomId}/assign`, {
+        const assignResponse = await fetchWithApiFallback(`/rooms/${tenantForm.roomId}/assign`, {
           method: 'PATCH',
           headers,
           body: JSON.stringify({ tenantId: data.user.id }),
@@ -476,10 +503,10 @@ function DashboardPage({ role, user, onLogout }) {
       setTenantForm({ name: '', email: '', password: '', phone: '', roomId: '' })
       setShowTenantForm(false)
       const [usersResponse, roomsResponse, staysResponse, paymentsResponse] = await Promise.all([
-        fetch(`${API_BASE}/users`, { headers }),
-        fetch(`${API_BASE}/rooms`, { headers }),
-        fetch(`${API_BASE}/users/stays`, { headers }),
-        fetch(`${API_BASE}/payments`, { headers }),
+        fetchWithApiFallback('/users', { headers }),
+        fetchWithApiFallback('/rooms', { headers }),
+        fetchWithApiFallback('/users/stays', { headers }),
+        fetchWithApiFallback('/payments', { headers }),
       ])
       if (usersResponse.ok) setServerTenants((await usersResponse.json()).users || [])
       if (roomsResponse.ok) {
@@ -1341,7 +1368,7 @@ export default function App() {
     const cleanedPassword = String(password || '').trim()
 
     try {
-      const response = await fetch(`${API_BASE}/auth/${endpoint}`, {
+      const response = await fetchWithApiFallback(`/auth/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
