@@ -1218,9 +1218,13 @@ function DashboardPage({ role, user, onLogout }) {
                 <span>Rent due</span>
                 <strong>₹3,000</strong>
               </div>
-              <div className="summary-pill">
+              <div className="summary-pill support-pill">
                 <span>Support</span>
                 <strong>On call</strong>
+                <div className="support-actions">
+                  <a href="tel:+917087338600" className="support-link call-link">Call</a>
+                  <a href="https://wa.me/917087338600?text=Hello%20I%20need%20support" target="_blank" rel="noreferrer" className="support-link whatsapp-link">WhatsApp</a>
+                </div>
               </div>
             </div>
           )}
