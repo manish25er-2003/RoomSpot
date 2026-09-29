@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 const portfolioNav = [
   { label: 'Home', href: '#home' },
   { label: 'About', href: '#about' },
@@ -37,16 +39,32 @@ const aiTools = [
 
 const projects = [
   {
+    title: 'Job Portal',
+    description: 'A job search platform that helps candidates discover opportunities and apply for roles, while employers can share openings and connect with applicants.',
+    stack: ['Job Listings', 'Search', 'Applications'],
+    latest: true,
+    link: 'https://github.com/manish25er-2003/',
+    linkLabel: 'View on GitHub',
+  },
+  {
+    title: 'RoomSpot',
+    description: 'A room rental platform where people can search available rooms and properties, while tenants and administrators manage accounts, payments, and rental activity.',
+    stack: ['React', 'Express', 'MongoDB'],
+    latest: true,
+    link: 'https://github.com/manish25er-2003/',
+    linkLabel: 'View on GitHub',
+  },
+  {
     title: 'SmartBank Systems',
     description: 'A secure banking application with user authentication, account management, and transaction processing.',
     stack: ['Java', 'MySQL'],
-    link: 'https://github.com/mainshKumar50/SmartBank_Systems',
+    link: 'https://github.com/mainshKumar50/SmartBanksys/tree/master',
   },
   {
     title: 'ShopVenture Website',
     description: 'An e-commerce platform with product browsing, shopping cart, and checkout functionality.',
     stack: ['PHP', 'Laravel', 'MySQL'],
-    link: 'https://github.com/mainshKumar50/ShopVenture_Website',
+    link: 'https://github.com/mainshKumar50/ShopVenture_Websites',
   },
   {
     title: 'Music Website',
@@ -99,6 +117,9 @@ const education = [
 ]
 
 export default function PortfolioPage() {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [expandedExperience, setExpandedExperience] = useState({})
+
   return (
     <div className="portfolio-page">
       <header className="portfolio-header">
@@ -112,9 +133,18 @@ export default function PortfolioPage() {
             <span>Manish Kumar</span>
           </div>
 
-          <nav className="portfolio-nav" aria-label="Portfolio navigation">
+          <nav
+            id="portfolio-navigation"
+            className={`portfolio-nav${menuOpen ? ' portfolio-nav-open' : ''}`}
+            aria-label="Portfolio navigation"
+          >
             {portfolioNav.map((item) => (
-              <a key={item.label} href={item.href} className="portfolio-nav-link">
+              <a
+                key={item.label}
+                href={item.href}
+                className="portfolio-nav-link"
+                onClick={() => setMenuOpen(false)}
+              >
                 {item.label}
               </a>
             ))}
@@ -123,6 +153,18 @@ export default function PortfolioPage() {
           <a href="/" className="portfolio-home-btn">
             Back to Home
           </a>
+          <button
+            type="button"
+            className="portfolio-menu-toggle"
+            aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+            aria-expanded={menuOpen}
+            aria-controls="portfolio-navigation"
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            <span />
+            <span />
+            <span />
+          </button>
         </div>
       </header>
 
@@ -240,8 +282,8 @@ export default function PortfolioPage() {
               </div>
 
               <div className="timeline-list">
-                {experience.map((item) => (
-                  <article key={item.title} className="timeline-card">
+                {experience.map((item, index) => (
+                  <article key={item.company} className="timeline-card">
                     <div className="timeline-head-row">
                       <div>
                         <h3>{item.title}</h3>
@@ -254,7 +296,24 @@ export default function PortfolioPage() {
                       <span className="timeline-year">{item.period}</span>
                     </div>
 
-                    <strong>{item.description}</strong>
+                    <p
+                      id={`experience-description-${index}`}
+                      className={`timeline-description${expandedExperience[index] ? ' timeline-description-expanded' : ''}`}
+                    >
+                      {item.description}
+                    </p>
+                    <button
+                      type="button"
+                      className="experience-description-toggle"
+                      aria-expanded={Boolean(expandedExperience[index])}
+                      aria-controls={`experience-description-${index}`}
+                      onClick={() => setExpandedExperience((current) => ({
+                        ...current,
+                        [index]: !current[index],
+                      }))}
+                    >
+                      {expandedExperience[index] ? 'Show less' : 'Read more'}
+                    </button>
 
                     <div className="tag-list">
                       {item.tags.map((tag) => (
@@ -266,7 +325,7 @@ export default function PortfolioPage() {
               </div>
             </div>
 
-            <div className="education-column">
+            <div className="education-column" id="education">
               <div className="portfolio-section-heading left-text">
                 <h2>Education</h2>
                 <span className="underline-mark" aria-hidden="true" />
@@ -345,6 +404,7 @@ export default function PortfolioPage() {
               {projects.map((project) => (
                 <article key={project.title} className="project-card">
                   <div className="project-body">
+                    {project.latest && <span className="project-latest-label">Latest project</span>}
                     <h3>{project.title}</h3>
                     <p>{project.description}</p>
                     <div className="tag-list">
@@ -352,8 +412,13 @@ export default function PortfolioPage() {
                         <span key={item} className="tag-pill">{item}</span>
                       ))}
                     </div>
-                    <a href={project.link} target="_blank" rel="noreferrer" className="project-link">
-                      View Project
+                    <a
+                      href={project.link}
+                      target={project.link.startsWith('#') ? undefined : '_blank'}
+                      rel={project.link.startsWith('#') ? undefined : 'noreferrer'}
+                      className="project-link"
+                    >
+                      {project.linkLabel || 'View Project'}
                     </a>
                   </div>
                 </article>

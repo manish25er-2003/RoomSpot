@@ -29,7 +29,7 @@ app.use(cors({
       return
     }
 
-    const localDevOriginPattern = /^(http:\/\/)(localhost|127\.0\.0\.1):(5[1-9]{2,3}|[6-9]\d{2,3})$/
+    const localDevOriginPattern = /^(http:\/\/)(localhost|127\.0\.0\.1|(?:\d{1,3}\.){3}\d{1,3}):(5[1-9]{2,3}|[6-9]\d{2,3})$/
     if (localDevOriginPattern.test(normalizedOrigin)) {
       callback(null, true)
       return

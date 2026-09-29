@@ -10,6 +10,7 @@ import { propertyData, featureData, steps } from '../data/properties'
 export default function Home({ onLogin, onRegister, onListProperty }) {
   const [filters, setFilters] = useState({ location: '', type: '', budget: '' })
   const [appliedFilters, setAppliedFilters] = useState({ location: '', type: '', budget: '' })
+  const [hasSearched, setHasSearched] = useState(false)
   const [selectedProperty, setSelectedProperty] = useState(null)
 
   const handleFilterChange = (field, value) => {
@@ -17,15 +18,24 @@ export default function Home({ onLogin, onRegister, onListProperty }) {
   }
 
   const handlePopularLocation = (location) => {
-    setFilters((prev) => ({ ...prev, location }))
+    const nextFilters = { ...filters, location }
+    setFilters(nextFilters)
+    setAppliedFilters(nextFilters)
+    setHasSearched(true)
   }
 
   const filteredProperties = useMemo(() => {
     const budgetValue = appliedFilters.budget === '' ? null : Number(appliedFilters.budget)
 
     return propertyData.filter((property) => {
-      const matchesLocation = !appliedFilters.location || property.location.toLowerCase().includes(appliedFilters.location.toLowerCase())
-      const matchesType = !appliedFilters.type || property.type === appliedFilters.type
+      const locationQuery = appliedFilters.location.trim().toLowerCase()
+      const matchesLocation = !locationQuery || property.location.toLowerCase().includes(locationQuery)
+      const propertyType = property.type.toLowerCase()
+      const selectedType = appliedFilters.type.toLowerCase()
+      const matchesType = !selectedType
+        || (selectedType === 'room' ? propertyType.includes('room')
+          : selectedType === 'flat' ? ['flat', 'apartment'].includes(propertyType)
+            : propertyType === selectedType)
       const matchesBudget = budgetValue === null || property.rent <= budgetValue
       return matchesLocation && matchesType && matchesBudget
     })
@@ -33,12 +43,14 @@ export default function Home({ onLogin, onRegister, onListProperty }) {
 
   const handleSearch = () => {
     setAppliedFilters({ ...filters })
+    setHasSearched(true)
   }
 
   const resetFilters = () => {
     const cleared = { location: '', type: '', budget: '' }
     setFilters(cleared)
     setAppliedFilters(cleared)
+    setHasSearched(true)
   }
 
   return (
@@ -96,6 +108,34 @@ export default function Home({ onLogin, onRegister, onListProperty }) {
           </div>
         </section>
 
+        {hasSearched && (
+          <section className="search-results-section" aria-live="polite">
+            <div className="container">
+              <div className="search-results-heading">
+                <div>
+                  <div className="eyebrow eyebrow-dark">Search results</div>
+                  <h2>{appliedFilters.location ? `Rooms near ${appliedFilters.location}` : 'Rooms matching your search'}</h2>
+                  <p>{filteredProperties.length} available {filteredProperties.length === 1 ? 'option' : 'options'} match your filters.</p>
+                </div>
+                <button type="button" className="secondary-btn" onClick={resetFilters}>Clear filters</button>
+              </div>
+
+              {filteredProperties.length === 0 ? (
+                <div className="no-results">
+                  <h3>No rooms found</h3>
+                  <p>Try another location, room type, or a higher budget.</p>
+                </div>
+              ) : (
+                <div className="property-grid">
+                  {filteredProperties.map((property) => (
+                    <PropertyCard key={`search-${property.id}`} property={property} onViewDetails={() => setSelectedProperty(property)} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
         <section className="section features-section">
           <div className="container">
             <div className="section-heading">
@@ -133,19 +173,11 @@ export default function Home({ onLogin, onRegister, onListProperty }) {
               Explore some of the latest rooms and properties available on RoomSpot.
             </p>
 
-            {(filteredProperties.length === 0) ? (
-              <div className="no-results">
-                <h3>No rooms available</h3>
-                <p>Try updating the location, type or budget to see other matching listings.</p>
-                <button type="button" className="primary-btn" onClick={resetFilters}>Reset filters</button>
-              </div>
-            ) : (
-              <div className="property-grid">
-                {filteredProperties.map((property) => (
-                  <PropertyCard key={property.id} property={property} onViewDetails={() => setSelectedProperty(property)} />
-                ))}
-              </div>
-            )}
+            <div className="property-grid">
+              {propertyData.slice(0, 8).map((property) => (
+                <PropertyCard key={`featured-${property.id}`} property={property} onViewDetails={() => setSelectedProperty(property)} />
+              ))}
+            </div>
           </div>
         </section>
 
@@ -175,24 +207,6 @@ export default function Home({ onLogin, onRegister, onListProperty }) {
               <p>List your property on RoomSpot and connect with people looking for rooms and rental properties.</p>
               <button type="button" className="primary-btn owner-btn" onClick={onListProperty || onRegister}>
                 List Your Property
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <section className="cta-section">
-          <div className="container cta-inner">
-            <div>
-              <h2>Ready to Find Your Next Home?</h2>
-              <p>Start exploring rooms and rental properties that match your location, lifestyle and budget.</p>
-            </div>
-
-            <div className="cta-actions">
-              <button type="button" className="primary-btn" onClick={onLogin}>
-                Find a Room
-              </button>
-              <button type="button" className="secondary-btn light-btn" onClick={onRegister}>
-                Create Account
               </button>
             </div>
           </div>

@@ -5,7 +5,7 @@ import PortfolioPage from './pages/PortfolioPage'
 import './App.css'
 
 const AUTH_KEY = 'roomspot-auth'
-const API_BASE = 'http://localhost:5000/api'
+const API_BASE = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || `${window.location.protocol}//${window.location.hostname}:5000/api`).replace(/\/$/, '')
 
 function readAuth() {
   try {
@@ -186,7 +186,7 @@ function DashboardPage({ role, user, onLogout }) {
 
   const fetchAdminUpi = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/settings/payment')
+      const response = await fetch(`${API_BASE}/settings/payment`)
       if (!response.ok) {
         return
       }

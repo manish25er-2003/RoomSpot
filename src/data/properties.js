@@ -1,10 +1,10 @@
-export const propertyData = [
+const featuredPropertyData = [
   {
     id: 1,
     title: 'Modern Single Room',
     location: 'Lalaru Mandi, Punjab',
     type: 'Private Room',
-    rent: 8000,
+    rent: 4500,
     status: 'Available',
     image:
       'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=900&q=80',
@@ -26,7 +26,7 @@ export const propertyData = [
     title: 'Shared Room Near ITI Chowk',
     location: 'ITI Chowk, Chandigarh',
     type: 'Shared Room',
-    rent: 6000,
+    rent: 3500,
     status: 'Available',
     image:
       'https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&w=900&q=80',
@@ -70,7 +70,7 @@ export const propertyData = [
     title: 'Modern Room Near ITI Chowk',
     location: 'ITI Chowk, Chandigarh',
     type: 'Private Room',
-    rent: 7000,
+    rent: 4500,
     status: 'Available',
     image:
       'https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&w=900&q=80',
@@ -137,7 +137,78 @@ export const popularLocations = [
   'Gurgaon',
   'Bangalore',
   'Lalaru Mandi',
+  'Lalru Mandi',
   'Prem Nagar',
   'Sardarpura',
   'ITI Chowk',
 ]
+
+const sampleListingTypes = [
+  {
+    type: 'Private Room',
+    title: 'Bright Private Room',
+    rent: 7800,
+    description: 'A comfortable private room with natural light, storage space and easy access to nearby shops and transport.',
+    image: 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=900&q=80',
+  },
+  {
+    type: 'Apartment',
+    title: 'Furnished Apartment',
+    rent: 15500,
+    description: 'A furnished apartment with a practical living area, a well-kept kitchen and convenient local amenities.',
+    image: 'https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=900&q=80',
+  },
+  {
+    type: 'Flat',
+    title: 'Modern City Flat',
+    rent: 17000,
+    description: 'A modern flat with a bright interior and convenient access to everyday services in the neighborhood.',
+    image: 'https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&w=900&q=80',
+  },
+  {
+    type: 'PG',
+    title: 'Comfortable PG Stay',
+    rent: 9500,
+    description: 'A welcoming PG option with essential furnishings and nearby transport for an easy daily commute.',
+    image: 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=900&q=80',
+  },
+  {
+    type: 'Shared Room',
+    title: 'Affordable Shared Room',
+    rent: 6200,
+    description: 'A budget-friendly shared room with useful amenities and access to local shops and transit.',
+    image: 'https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&w=900&q=80',
+  },
+  {
+    type: 'Private Room',
+    title: 'Quiet Furnished Room',
+    rent: 8800,
+    description: 'A furnished private room with a calm atmosphere, workspace and storage for comfortable everyday living.',
+    image: 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=900&q=80',
+  },
+]
+
+const sampleListings = popularLocations.flatMap((location, locationIndex) =>
+  sampleListingTypes.map((listing, listingIndex) => {
+    const isAffordableRoomArea = /lalaru mandi|lalru mandi|iti chowk/i.test(location)
+    const affordableRoomPrices = {
+      0: 4000,
+      3: 4500,
+      4: 3500,
+      5: 4800,
+    }
+
+    return {
+      ...listing,
+      id: 1000 + locationIndex * sampleListingTypes.length + listingIndex,
+      title: `${listing.title} in ${location}`,
+      location,
+      rent: isAffordableRoomArea && affordableRoomPrices[listingIndex]
+        ? affordableRoomPrices[listingIndex]
+        : listing.rent + locationIndex * 250,
+      status: 'Available',
+    }
+  }),
+)
+
+export const propertyData = [...featuredPropertyData, ...sampleListings]
