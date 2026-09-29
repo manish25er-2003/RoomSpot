@@ -1,4 +1,4 @@
-# Maish — Smart Room & Rent Management
+# Smart Room & Rent Management
 
 A responsive room and rent management app with a React + Vite client and an Express, MongoDB and Mongoose API. Admin and tenant accounts use JWT authentication. If the API is unavailable, the UI opens in a local demo workspace so you can explore the screens; demo changes are stored in this browser only.
 
