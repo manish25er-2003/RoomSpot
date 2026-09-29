@@ -127,6 +127,15 @@ function AuthPage({ mode, onSubmit }) {
   )
 }
 
+function calculateStayDays(startDate, today) {
+  if (!startDate) return null
+  const start = new Date(startDate)
+  const current = new Date(today)
+  start.setHours(0, 0, 0, 0)
+  current.setHours(0, 0, 0, 0)
+  return Math.max(0, Math.floor((current - start) / 86400000))
+}
+
 function DashboardPage({ role, user, onLogout }) {
   const isAdmin = role === 'admin'
   const navItems = isAdmin
@@ -134,6 +143,14 @@ function DashboardPage({ role, user, onLogout }) {
     : ['Overview', 'My room', 'Payments', 'Complaints', 'Messages']
 
   const [activeSection, setActiveSection] = useState('Overview')
+  const [stayRecords, setStayRecords] = useState([])
+  const [serverTenants, setServerTenants] = useState(null)
+  const [availableRooms, setAvailableRooms] = useState([])
+  const [serverPayments, setServerPayments] = useState(null)
+  const [today, setToday] = useState(() => new Date())
+  const [showTenantForm, setShowTenantForm] = useState(false)
+  const [tenantForm, setTenantForm] = useState({ name: '', email: '', password: '', phone: '', roomId: '' })
+  const [savingTenant, setSavingTenant] = useState(false)
 
   const quickActions = isAdmin
     ? [
@@ -153,6 +170,15 @@ function DashboardPage({ role, user, onLogout }) {
     ? [72, 88, 80, 95, 100, 84, 92]
     : [58, 70, 68, 82, 90, 76, 85]
 
+  const overviewMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const overviewRequestData = [0.82, 0.56, 0.7, 0.96, 1.18, 0.9, 1.36, 1.12, 0.94, 1.28, 0.76, 0.84]
+  const overviewErrorData = [18, 14, 20, 16, 28, 12, 17, 15, 22, 10, 16, 9]
+  const overviewActivity = [
+    { title: 'Room 201 rent reminder sent', time: '2 hours ago', tone: 'info' },
+    { title: 'Maintenance request closed', time: 'Today', tone: 'success' },
+    { title: 'Tenant move-in scheduled', time: 'Yesterday', tone: 'warning' },
+  ]
+
   const [rooms, setRooms] = useState([
     { id: 1, name: 'Room 101', type: 'Private room', status: 'Occupied', rent: '₹12,000', occupancy: '92%' },
     { id: 2, name: 'Room 201', type: '1BHK', status: 'Available', rent: '₹18,500', occupancy: '100%' },
@@ -170,16 +196,6 @@ function DashboardPage({ role, user, onLogout }) {
     { id: 2, name: 'Security deposit', owner: 'Rohit Verma', amount: '₹8,000', due: 'Pending', tag: 'warning' },
     { id: 3, name: 'Maintenance', owner: 'Neha Patel', amount: '₹1,200', due: 'Paid', tag: 'success' },
   ])
-
-  const tenantPaymentSummary = [
-    { label: 'Room Rent', amount: 8000, status: 'Pending' },
-    { label: 'Electricity', amount: 1200, status: 'Pending' },
-    { label: 'Water', amount: 300, status: 'Pending' },
-    { label: 'Maintenance', amount: 500, status: 'Pending' },
-  ]
-
-  const tenantTotalDue = tenantPaymentSummary.reduce((sum, item) => sum + item.amount, 0)
-  const hasPendingTenantPayment = tenantPaymentSummary.some((item) => item.status === 'Pending')
 
   const [upiDetails, setUpiDetails] = useState({ adminUpiId: '' })
   const [upiInput, setUpiInput] = useState('')
@@ -204,6 +220,91 @@ function DashboardPage({ role, user, onLogout }) {
   useEffect(() => {
     fetchAdminUpi()
   }, [])
+
+  useEffect(() => {
+    let mounted = true
+    const token = readAuth().token
+    const headers = { Authorization: `Bearer ${token}` }
+
+    const loadDashboardData = async () => {
+      const requests = [
+        fetch(`${API_BASE}/users/stays`, { headers }),
+        fetch(`${API_BASE}/payments`, { headers }),
+      ]
+      if (isAdmin) {
+        requests.push(fetch(`${API_BASE}/users`, { headers }), fetch(`${API_BASE}/rooms`, { headers }))
+      }
+
+      try {
+        const responses = await Promise.all(requests)
+        if (!mounted) return
+        if (responses[0].ok) {
+          const data = await responses[0].json()
+          setStayRecords(data.stays || [])
+        }
+        if (responses[1].ok) {
+          const data = await responses[1].json()
+          setServerPayments(data.payments || [])
+        }
+        if (isAdmin && responses[2]?.ok) {
+          const data = await responses[2].json()
+          setServerTenants(data.users || [])
+        }
+        if (isAdmin && responses[3]?.ok) {
+          const data = await responses[3].json()
+          setAvailableRooms(data.rooms || [])
+          setRooms((data.rooms || []).map((room) => ({
+            id: room._id,
+            name: room.number,
+            type: room.type,
+            status: room.status,
+            rent: `₹${Number(room.rent || 0).toLocaleString('en-IN')}`,
+          })))
+        }
+      } catch {
+        // Keep the existing local dashboard data available if the API is offline.
+      }
+    }
+
+    loadDashboardData()
+    return () => { mounted = false }
+  }, [isAdmin])
+
+  useEffect(() => {
+    let midnightTimer
+    const scheduleNextDay = () => {
+      const now = new Date()
+      const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+      midnightTimer = window.setTimeout(() => {
+        setToday(new Date())
+        scheduleNextDay()
+      }, nextMidnight.getTime() - now.getTime() + 100)
+    }
+    scheduleNextDay()
+    return () => window.clearTimeout(midnightTimer)
+  }, [])
+
+  const currentMonth = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(today)
+  const currentTenantPayments = (serverPayments || []).filter((payment) => payment.month === currentMonth)
+  const userId = user?.id || user?._id || readAuth().user?.id || readAuth().user?._id || ''
+  const tenantCurrentPayments = currentTenantPayments.filter((payment) => {
+    const paymentTenantId = typeof payment.tenant === 'object' ? payment.tenant?._id : payment.tenant
+    return String(paymentTenantId || '') === String(userId || '')
+  })
+  const tenantPaymentSummary = (tenantCurrentPayments.length ? tenantCurrentPayments : [
+    { type: 'Room Rent', amount: 0, status: 'Pending' },
+    { type: 'Electricity Bill', amount: 0, status: 'Pending' },
+    { type: 'Water Bill', amount: 0, status: 'Pending' },
+    { type: 'Security Charge', amount: 0, status: 'Pending' },
+  ]).map((payment) => ({
+    label: payment.type || payment.label || 'Payment',
+    amount: Number(payment.amount || 0),
+    status: payment.status || 'Pending',
+  }))
+  const tenantTotalDue = tenantPaymentSummary
+    .filter((item) => item.status === 'Pending')
+    .reduce((sum, item) => sum + Number(item.amount || 0), 0)
+  const hasPendingTenantPayment = tenantPaymentSummary.some((item) => item.status === 'Pending')
 
   const [complaints, setComplaints] = useState([
     { id: 1, title: 'Water leakage', owner: 'Aisha Khan', status: 'Open', priority: 'High' },
@@ -238,20 +339,73 @@ function DashboardPage({ role, user, onLogout }) {
         { label: 'Profile', value: 'Verified', trend: 'Lease active' },
       ]
 
-  const markPaid = (id) => {
-    setPayments((prev) => prev.map((item) => (item.id === id ? { ...item, due: 'Paid', tag: 'success' } : item)))
+  const markPaid = async (id) => {
+    const token = readAuth().token
+    try {
+      const response = await fetch(`${API_BASE}/payments/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: 'Paid' }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        window.alert(data?.message || 'Unable to update payment status')
+        return
+      }
+      setServerPayments((prev) => (prev || []).map((payment) => (
+        payment._id === id ? { ...payment, ...data.payment, status: 'Paid' } : payment
+      )))
+      window.alert('Payment marked as paid.')
+    } catch {
+      window.alert('Unable to reach the server. Please check the backend connection.')
+    }
   }
 
   const handleTenantPayNow = async (payment) => {
-    if (payment?.due !== 'Pending') {
+    if (!payment || (payment.status || payment.due) !== 'Pending') {
       return
     }
 
-    const nextUpi = upiDetails.adminUpiId || '7087338600@ybl'
-    window.alert(`Pay to: ${nextUpi}`)
+    const token = readAuth().token
+    try {
+      const response = await fetch(`${API_BASE}/payments/${payment._id}/pay`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          method: 'UPI',
+          transactionId: `UPI-${Date.now()}`,
+          transactionDetails: { source: 'tenant payment confirmation' },
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        window.alert(data?.message || 'Unable to complete payment')
+        return
+      }
+
+      setServerPayments((prev) => (prev || []).map((entry) => (
+        entry._id === payment._id ? { ...entry, ...data.payment, status: 'Paid' } : entry
+      )))
+      window.alert('Payment completed successfully.')
+    } catch {
+      const nextUpi = upiDetails.adminUpiId || '7087338600@ybl'
+      window.alert(`Unable to reach the server. Pay to: ${nextUpi}`)
+    }
   }
 
   const handleTenantPaymentRowPay = () => {
+    const pendingPayment = (serverPayments || []).find((payment) => payment.month === currentMonth && (payment.status || payment.due) === 'Pending' && String(typeof payment.tenant === 'object' ? payment.tenant?._id : payment.tenant || '') === String(userId || ''))
+    if (pendingPayment) {
+      handleTenantPayNow(pendingPayment)
+      return
+    }
+
     const nextUpi = upiDetails.adminUpiId || '7087338600@ybl'
     window.alert(`Pay to: ${nextUpi}`)
   }
@@ -281,6 +435,70 @@ function DashboardPage({ role, user, onLogout }) {
       window.alert('Admin UPI ID updated successfully.')
     } catch {
       window.alert('Unable to reach the server. Please check the backend connection.')
+    }
+  }
+
+  const handleTenantFormChange = (event) => {
+    const { name, value } = event.target
+    setTenantForm((current) => ({ ...current, [name]: value }))
+  }
+
+  const handleAddTenant = async (event) => {
+    event.preventDefault()
+    setSavingTenant(true)
+    const token = readAuth().token
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+
+    try {
+      const response = await fetch(`${API_BASE}/users`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(tenantForm),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        window.alert(data?.message || 'Unable to add tenant')
+        return
+      }
+
+      if (tenantForm.roomId) {
+        const assignResponse = await fetch(`${API_BASE}/rooms/${tenantForm.roomId}/assign`, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ tenantId: data.user.id }),
+        })
+        const assignData = await assignResponse.json()
+        if (!assignResponse.ok) {
+          window.alert(`Tenant account created, but room assignment failed: ${assignData?.message || 'Please assign a room from the Rooms section.'}`)
+        }
+      }
+
+      setTenantForm({ name: '', email: '', password: '', phone: '', roomId: '' })
+      setShowTenantForm(false)
+      const [usersResponse, roomsResponse, staysResponse, paymentsResponse] = await Promise.all([
+        fetch(`${API_BASE}/users`, { headers }),
+        fetch(`${API_BASE}/rooms`, { headers }),
+        fetch(`${API_BASE}/users/stays`, { headers }),
+        fetch(`${API_BASE}/payments`, { headers }),
+      ])
+      if (usersResponse.ok) setServerTenants((await usersResponse.json()).users || [])
+      if (roomsResponse.ok) {
+        const nextRooms = (await roomsResponse.json()).rooms || []
+        setAvailableRooms(nextRooms)
+        setRooms(nextRooms.map((room) => ({
+          id: room._id,
+          name: room.number,
+          type: room.type,
+          status: room.status,
+          rent: `₹${Number(room.rent || 0).toLocaleString('en-IN')}`,
+        })))
+      }
+      if (staysResponse.ok) setStayRecords((await staysResponse.json()).stays || [])
+      if (paymentsResponse.ok) setServerPayments((await paymentsResponse.json()).payments || [])
+    } catch {
+      window.alert('Unable to reach the server. Please check the backend connection.')
+    } finally {
+      setSavingTenant(false)
     }
   }
 
@@ -346,6 +564,90 @@ function DashboardPage({ role, user, onLogout }) {
             ))}
           </div>
 
+          <div className="monitor-grid">
+            <div className="monitor-panel dark-panel">
+              <div className="monitor-header">
+                <div>
+                  <span className="monitor-label">Total API Requests</span>
+                </div>
+                <button type="button" className="monitor-filter">All API Keys</button>
+              </div>
+
+              <div className="monitor-body">
+                <div className="monitor-value">
+                  <strong>1.5K</strong>
+                  <span>Requests</span>
+                </div>
+                <div className="monitor-axis">
+                  <span>1.5K</span>
+                  <span>1K</span>
+                  <span>0.5K</span>
+                  <span>0</span>
+                </div>
+                <div className="monitor-chart" aria-label="API requests chart">
+                  {overviewRequestData.map((value, index) => (
+                    <div key={`request-${index}`} className="monitor-column">
+                      <div className="monitor-bar monitor-bar-primary" style={{ height: `${value * 100}%` }} />
+                    </div>
+                  ))}
+                </div>
+                <div className="monitor-scale">
+                  <span>UTC-8</span>
+                  <span>Sep 10</span>
+                  <span>Sep 17</span>
+                  <span>Sep 24</span>
+                </div>
+              </div>
+
+              <div className="monitor-legend">
+                <span><i className="legend-dot blue" /> Default Gemini API Key</span>
+                <span><i className="legend-dot green" /> Success rate</span>
+              </div>
+            </div>
+
+            <div className="monitor-panel dark-panel">
+              <div className="monitor-header">
+                <div>
+                  <span className="monitor-label">Total API Errors</span>
+                </div>
+                <span className="monitor-mini-icon">⌁</span>
+              </div>
+
+              <div className="monitor-body">
+                <div className="monitor-value">
+                  <strong>150</strong>
+                  <span>Errors</span>
+                </div>
+                <div className="monitor-axis">
+                  <span>150</span>
+                  <span>100</span>
+                  <span>50</span>
+                  <span>0</span>
+                </div>
+                <div className="monitor-chart" aria-label="API error chart">
+                  {overviewErrorData.map((value, index) => (
+                    <div key={`error-${index}`} className="monitor-column">
+                      <div className="monitor-bar monitor-bar-pink" style={{ height: `${Math.max(20, value)}%` }} />
+                    </div>
+                  ))}
+                </div>
+                <div className="monitor-scale">
+                  <span>UTC-8</span>
+                  <span>Sep 10</span>
+                  <span>Sep 17</span>
+                  <span>Sep 24</span>
+                </div>
+              </div>
+
+              <div className="monitor-legend stacked-legend">
+                <span><i className="legend-dot pink" /> 400 BadRequest</span>
+                <span><i className="legend-dot blue" /> 404 NotFound</span>
+                <span><i className="legend-dot green" /> 429 TooManyRequests</span>
+                <span><i className="legend-dot purple" /> 500 InternalServerError</span>
+              </div>
+            </div>
+          </div>
+
           <div className="overview-layout">
             <div className="info-panel chart-panel">
               <div className="panel-heading">
@@ -358,8 +660,10 @@ function DashboardPage({ role, user, onLogout }) {
               <div className="chart-bars" aria-label="Trend chart">
                 {trendData.map((value, index) => (
                   <div key={index} className="chart-column">
-                    <div className="chart-bar" style={{ height: `${value}%` }} />
-                    <span>{['M', 'T', 'W', 'T', 'F', 'S', 'S'][index]}</span>
+                    <div className="chart-bar" style={{ height: `${value}%` }} data-label={`${overviewMonths[index % overviewMonths.length]} ${new Date().getFullYear()}`}>
+                      <span className="chart-hover-label">{overviewMonths[index % overviewMonths.length]}</span>
+                    </div>
+                    <span>{overviewMonths[index % overviewMonths.length]}</span>
                   </div>
                 ))}
               </div>
@@ -392,25 +696,42 @@ function DashboardPage({ role, user, onLogout }) {
                   <p>What has been happening lately</p>
                 </div>
               </div>
-              <ul className="activity-list">
-                <li>New tenant onboarding completed.</li>
-                <li>Maintenance check scheduled for Room 201.</li>
-                <li>Rent collection updated successfully.</li>
-              </ul>
+              <div className="activity-feed">
+                {overviewActivity.map((item) => (
+                  <div key={item.title} className={`activity-item ${item.tone}`}>
+                    <span className="activity-dot" />
+                    <div>
+                      <strong>{item.title}</strong>
+                      <small>{item.time}</small>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="info-panel">
               <div className="panel-heading">
                 <div>
-                  <h3>{isAdmin ? 'Property insights' : 'Your stay'}</h3>
-                  <p>{isAdmin ? 'Performance snapshot' : 'Booking snapshot'}</p>
+                  <h3>{isAdmin ? 'Stay overview' : 'Your stay'}</h3>
+                  <p>{isAdmin ? 'Active room occupancy' : 'Stay summary'}</p>
                 </div>
               </div>
-              <ul className="activity-list">
-                <li>{isAdmin ? 'Occupancy remains strong.' : 'Your room is well maintained.'}</li>
-                <li>{isAdmin ? '2 premium rooms are trending.' : 'Your rental payment is on track.'}</li>
-                <li>{isAdmin ? 'Owner response time is under 3 hours.' : 'Support team is available for help.'}</li>
-              </ul>
+              <div className="stay-compact-list">
+                {stayRecords.length ? stayRecords.slice(0, 3).map((stay) => (
+                  <div className="stay-compact-item" key={stay.tenantId}>
+                    <div>
+                      <strong>{isAdmin ? stay.tenantName : 'Room stay'}</strong>
+                      <small>Room {stay.roomNumber}</small>
+                    </div>
+                    <div className="stay-compact-meta">
+                      <span>{stay.rentStartDate ? `${calculateStayDays(stay.rentStartDate, today)} Days` : '—'}</span>
+                      <em>{stay.rentStartDate ? new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' }).format(new Date(stay.rentStartDate)) : 'Not started'}</em>
+                    </div>
+                  </div>
+                )) : (
+                  <div className="stay-empty-inline">{isAdmin ? 'No active tenant stays yet.' : 'A stay summary will appear here when a room is assigned.'}</div>
+                )}
+              </div>
             </div>
           </div>
         </>
@@ -500,8 +821,43 @@ function DashboardPage({ role, user, onLogout }) {
               <h3>Tenant records</h3>
               <p>Verification and stay details</p>
             </div>
-            <button type="button" className="action-button primary">Add tenant</button>
+            <button type="button" className="action-button primary" onClick={() => setShowTenantForm((open) => !open)}>
+              {showTenantForm ? 'Cancel' : 'Add tenant'}
+            </button>
           </div>
+
+          {showTenantForm && (
+            <form className="tenant-create-form" onSubmit={handleAddTenant}>
+              <label>
+                Tenant name
+                <input name="name" value={tenantForm.name} onChange={handleTenantFormChange} required />
+              </label>
+              <label>
+                Email address
+                <input name="email" type="email" value={tenantForm.email} onChange={handleTenantFormChange} required />
+              </label>
+              <label>
+                Temporary password
+                <input name="password" type="password" minLength="6" value={tenantForm.password} onChange={handleTenantFormChange} required />
+              </label>
+              <label>
+                Phone (optional)
+                <input name="phone" type="tel" value={tenantForm.phone} onChange={handleTenantFormChange} />
+              </label>
+              <label className="tenant-room-select">
+                Assign room (optional)
+                <select name="roomId" value={tenantForm.roomId} onChange={handleTenantFormChange}>
+                  <option value="">Add without assigning</option>
+                  {availableRooms.filter((room) => room.status === 'Available' && !room.tenant).map((room) => (
+                    <option key={room._id} value={room._id}>{room.number} · ₹{Number(room.rent).toLocaleString('en-IN')}/month</option>
+                  ))}
+                </select>
+              </label>
+              <button type="submit" className="action-button primary" disabled={savingTenant}>
+                {savingTenant ? 'Saving…' : 'Add tenant'}
+              </button>
+            </form>
+          )}
 
           <div className="data-table">
             <div className="table-head">
@@ -510,12 +866,12 @@ function DashboardPage({ role, user, onLogout }) {
               <span>Lease</span>
               <span>Status</span>
             </div>
-            {tenants.map((tenant) => (
-              <div className="table-row" key={tenant.id}>
+            {(serverTenants || tenants).map((tenant) => (
+              <div className="table-row" key={tenant._id || tenant.id}>
                 <span>{tenant.name}</span>
-                <span>{tenant.room}</span>
-                <span>{tenant.lease}</span>
-                <span><em className={`status-badge ${tenant.status === 'Verified' ? 'success' : 'warning'}`}>{tenant.status}</em></span>
+                <span>{tenant.room?.number || tenant.room || 'Unassigned'}</span>
+                <span>{tenant.rentStartDate ? `${calculateStayDays(tenant.rentStartDate, today)} days` : (tenant.lease || 'Not started')}</span>
+                <span><em className={`status-badge ${tenant.isActive === false || tenant.status === 'Pending' ? 'warning' : 'success'}`}>{tenant.isActive === false ? 'Inactive' : (tenant.status || 'Active')}</em></span>
               </div>
             ))}
           </div>
@@ -564,20 +920,28 @@ function DashboardPage({ role, user, onLogout }) {
               <span>Status</span>
               <span>Action</span>
             </div>
-            {payments.map((payment) => (
-              <div className="table-row" key={payment.id}>
-                <span>{payment.name}</span>
-                <span>{payment.amount}</span>
-                <span><em className={`status-badge ${payment.tag === 'success' ? 'success' : 'warning'}`}>{payment.due}</em></span>
-                <span>
-                  {payment.due === 'Pending' ? (
-                    <button type="button" className="action-button small" onClick={() => handleTenantPayNow(payment)}>Pay Now</button>
-                  ) : (
-                    <span className="muted-label">Completed</span>
-                  )}
-                </span>
-              </div>
-            ))}
+            {(serverPayments && serverPayments.length ? serverPayments.filter((payment) => payment.month === currentMonth && String(typeof payment.tenant === 'object' ? payment.tenant?._id : payment.tenant || '') === String(userId || '')) : payments).map((payment) => {
+              const normalized = {
+                id: payment._id || payment.id,
+                type: payment.type || payment.name || 'Payment',
+                amount: `₹${Number(payment.amount || 0).toLocaleString('en-IN')}`,
+                status: payment.status || payment.due || 'Pending',
+              }
+              return (
+                <div className="table-row" key={normalized.id}>
+                  <span>{normalized.type}</span>
+                  <span>{normalized.amount}</span>
+                  <span><em className={`status-badge ${normalized.status === 'Paid' ? 'success' : 'warning'}`}>{normalized.status}</em></span>
+                  <span>
+                    {normalized.status === 'Pending' ? (
+                      <button type="button" className="action-button small" onClick={() => handleTenantPayNow(payment)}>Pay Now</button>
+                    ) : (
+                      <span className="muted-label">Completed</span>
+                    )}
+                  </span>
+                </div>
+              )
+            })}
           </div>
         </div>
       )
@@ -614,21 +978,30 @@ function DashboardPage({ role, user, onLogout }) {
               <span>Status</span>
               <span>Action</span>
             </div>
-            {payments.map((payment) => (
-              <div className="table-row" key={payment.id}>
-                <span>{payment.owner}</span>
-                <span>{payment.name}</span>
-                <span>{payment.amount}</span>
-                <span><em className={`status-badge ${payment.tag === 'success' ? 'success' : 'warning'}`}>{payment.due}</em></span>
-                <span>
-                  {payment.due === 'Pending' ? (
-                    <button type="button" className="action-button small" onClick={() => markPaid(payment.id)}>Confirm</button>
-                  ) : (
-                    <span className="muted-label">Done</span>
-                  )}
-                </span>
-              </div>
-            ))}
+            {(serverPayments && serverPayments.length ? serverPayments.filter((payment) => payment.month === currentMonth) : payments).map((payment) => {
+              const normalized = {
+                id: payment._id || payment.id,
+                owner: payment.tenant?.name || payment.owner || 'Tenant',
+                type: payment.type || payment.name || 'Payment',
+                amount: `₹${Number(payment.amount || 0).toLocaleString('en-IN')}`,
+                status: payment.status || payment.due || 'Pending',
+              }
+              return (
+                <div className="table-row" key={normalized.id}>
+                  <span>{normalized.owner}</span>
+                  <span>{normalized.type}</span>
+                  <span>{normalized.amount}</span>
+                  <span><em className={`status-badge ${normalized.status === 'Paid' ? 'success' : 'warning'}`}>{normalized.status}</em></span>
+                  <span>
+                    {normalized.status === 'Pending' ? (
+                      <button type="button" className="action-button small" onClick={() => markPaid(normalized.id)}>Confirm</button>
+                    ) : (
+                      <span className="muted-label">Done</span>
+                    )}
+                  </span>
+                </div>
+              )
+            })}
           </div>
         </div>
       )
@@ -851,6 +1224,39 @@ function DashboardPage({ role, user, onLogout }) {
               </div>
             </div>
           )}
+
+          <section className="stay-overview-panel" aria-label="Current tenant stays">
+            <div className="stay-overview-heading">
+              <div>
+                <span className="stay-overview-kicker">Stay tracking</span>
+                <h3>{isAdmin ? 'Current tenant stays' : 'Your current stay'}</h3>
+              </div>
+              {isAdmin && <span className="stay-live-indicator">Updated daily</span>}
+            </div>
+
+            {stayRecords.length ? (
+              <div className="stay-overview-list">
+                {stayRecords.map((stay) => (
+                  <article className="stay-overview-row" key={stay.tenantId}>
+                    <div className="stay-person-room">
+                      <strong>{isAdmin ? stay.tenantName : 'Room stay'}</strong>
+                      <span>Room {stay.roomNumber}</span>
+                    </div>
+                    <div className="stay-date-value">
+                      <span>Rent start date</span>
+                      <strong>{stay.rentStartDate ? new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(stay.rentStartDate)) : 'Not recorded'}</strong>
+                    </div>
+                    <div className="stay-duration-value">
+                      <span>Current Stay</span>
+                      <strong>{stay.rentStartDate ? `${calculateStayDays(stay.rentStartDate, today)} Days` : '—'}</strong>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="stay-empty-state">{isAdmin ? 'No tenants have an assigned room yet.' : 'A stay summary will appear here when a room is assigned to your account.'}</p>
+            )}
+          </section>
 
           {renderSection()}
         </section>
