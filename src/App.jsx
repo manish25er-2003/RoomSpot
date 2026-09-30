@@ -212,6 +212,12 @@ function DashboardPage({ role, user, onLogout }) {
     { id: 3, name: 'PG Floor', type: 'Shared room', status: 'Occupied', rent: '₹7,500', occupancy: '88%' },
   ])
 
+  const availableRoomChoices = (availableRooms.length ? availableRooms : rooms).filter((room) => {
+    const roomStatus = String(room?.status || '').toLowerCase()
+    const hasTenant = Boolean(room?.tenant)
+    return roomStatus === 'available' && !hasTenant
+  })
+
   const [tenants, setTenants] = useState([
     { id: 1, name: 'Aisha Khan', status: 'Verified', lease: '2 months', room: 'Room 101' },
     { id: 2, name: 'Rohit Verma', status: 'Pending', lease: '1 month', room: 'Room 205' },
@@ -347,10 +353,12 @@ function DashboardPage({ role, user, onLogout }) {
   const [showComplaintForm, setShowComplaintForm] = useState(false)
 
   const [messages, setMessages] = useState([
-    { id: 1, from: 'Owner', preview: 'The room inspection is scheduled for Friday.', unread: 2 },
-    { id: 2, from: 'Support', preview: 'Your rent payment has been recorded.', unread: 0 },
-    { id: 3, from: 'Manager', preview: 'Your complaint has been assigned to the team.', unread: 1 },
+    { id: 1, from: 'Owner', preview: 'The room inspection is scheduled for Friday.', unread: 2, time: '10:24 AM', subject: 'Inspection update' },
+    { id: 2, from: 'Support', preview: 'Your rent payment has been recorded.', unread: 0, time: 'Yesterday', subject: 'Payment confirmation' },
+    { id: 3, from: 'Manager', preview: 'Your complaint has been assigned to the team.', unread: 1, time: 'Mon', subject: 'Maintenance follow-up' },
   ])
+  const [selectedMessageId, setSelectedMessageId] = useState(1)
+  const [replyText, setReplyText] = useState('')
 
   const stats = isAdmin
     ? [
@@ -570,8 +578,27 @@ function DashboardPage({ role, user, onLogout }) {
     }))
   }
 
+  const activeMessage = messages.find((message) => message.id === selectedMessageId) || messages[0]
+
   const readMessage = (id) => {
+    setSelectedMessageId(id)
     setMessages((prev) => prev.map((message) => (message.id === id ? { ...message, unread: 0 } : message)))
+  }
+
+  const sendReply = () => {
+    const trimmed = replyText.trim()
+    if (!trimmed) return
+
+    setMessages((prev) => prev.map((message) => {
+      if (message.id !== selectedMessageId) return message
+      return {
+        ...message,
+        preview: trimmed,
+        unread: 0,
+        time: 'Just now',
+      }
+    }))
+    setReplyText('')
   }
 
   const renderSection = () => {
@@ -854,36 +881,59 @@ function DashboardPage({ role, user, onLogout }) {
           </div>
 
           {showTenantForm && (
-            <form className="tenant-create-form" onSubmit={handleAddTenant}>
-              <label>
-                Tenant name
-                <input name="name" value={tenantForm.name} onChange={handleTenantFormChange} required />
-              </label>
-              <label>
-                Email address
-                <input name="email" type="email" value={tenantForm.email} onChange={handleTenantFormChange} required />
-              </label>
-              <label>
-                Temporary password
-                <input name="password" type="password" minLength="6" value={tenantForm.password} onChange={handleTenantFormChange} required />
-              </label>
-              <label>
-                Phone (optional)
-                <input name="phone" type="tel" value={tenantForm.phone} onChange={handleTenantFormChange} />
-              </label>
-              <label className="tenant-room-select">
-                Assign room (optional)
-                <select name="roomId" value={tenantForm.roomId} onChange={handleTenantFormChange}>
-                  <option value="">Add without assigning</option>
-                  {availableRooms.filter((room) => room.status === 'Available' && !room.tenant).map((room) => (
-                    <option key={room._id} value={room._id}>{room.number} · ₹{Number(room.rent).toLocaleString('en-IN')}/month</option>
-                  ))}
-                </select>
-              </label>
-              <button type="submit" className="action-button primary" disabled={savingTenant}>
-                {savingTenant ? 'Saving…' : 'Add tenant'}
-              </button>
-            </form>
+            <div className="tenant-form-panel">
+              <div className="tenant-form-header">
+                <div>
+                  <h3>Add new tenant</h3>
+                  <p>Create the tenant account and optionally assign an available room.</p>
+                </div>
+                <button type="button" className="mini-link-button" onClick={() => setShowTenantForm(false)}>
+                  Cancel
+                </button>
+              </div>
+
+              <form className="tenant-form" onSubmit={handleAddTenant}>
+                <div className="tenant-form-grid">
+                  <label className="tenant-field">
+                    <span className="field-label">Tenant name</span>
+                    <input name="name" value={tenantForm.name} onChange={handleTenantFormChange} placeholder="John Smith" required />
+                  </label>
+
+                  <label className="tenant-field">
+                    <span className="field-label">Email address</span>
+                    <input name="email" type="email" value={tenantForm.email} onChange={handleTenantFormChange} placeholder="tenant@gmail.com" required />
+                  </label>
+
+                  <label className="tenant-field">
+                    <span className="field-label">Temporary password</span>
+                    <input name="password" type="password" minLength="6" value={tenantForm.password} onChange={handleTenantFormChange} placeholder="Minimum 6 characters" required />
+                  </label>
+
+                  <label className="tenant-field">
+                    <span className="field-label">Phone</span>
+                    <input name="phone" type="tel" value={tenantForm.phone} onChange={handleTenantFormChange} placeholder="Optional" />
+                  </label>
+
+                  <label className="tenant-field tenant-field-wide">
+                    <span className="field-label">Assign room (optional)</span>
+                    <select name="roomId" value={tenantForm.roomId} onChange={handleTenantFormChange} disabled={!availableRoomChoices.length}>
+                      <option value="">{availableRoomChoices.length ? 'Add without assigning' : 'No rooms available right now'}</option>
+                      {availableRoomChoices.map((room) => (
+                        <option key={room._id || room.id} value={room._id || room.id}>
+                          {room.number || room.name} · ₹{Number(room.rent || 0).toLocaleString('en-IN')}/month
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+
+                <div className="tenant-form-actions">
+                  <button type="submit" className="action-button primary" disabled={savingTenant}>
+                    {savingTenant ? 'Saving…' : 'Add tenant'}
+                  </button>
+                </div>
+              </form>
+            </div>
           )}
 
           <div className="data-table">
@@ -1112,7 +1162,7 @@ function DashboardPage({ role, user, onLogout }) {
 
     if (activeSection === 'Messages') {
       return (
-        <div className="content-card">
+        <div className="content-card messages-card">
           <div className="content-header">
             <div>
               <h3>Messages</h3>
@@ -1120,19 +1170,61 @@ function DashboardPage({ role, user, onLogout }) {
             </div>
           </div>
 
-          <div className="task-list">
-            {messages.map((message) => (
-              <div className="task-item" key={message.id}>
-                <div>
-                  <h4>{message.from}</h4>
+          <div className="messages-panel">
+            <div className="message-list">
+              {messages.map((message) => (
+                <button
+                  type="button"
+                  key={message.id}
+                  className={`message-item ${selectedMessageId === message.id ? 'active' : ''}`}
+                  onClick={() => readMessage(message.id)}
+                >
+                  <div className="message-item-top">
+                    <strong>{message.from}</strong>
+                    <span>{message.time}</span>
+                  </div>
+                  <div className="message-item-row">
+                    <span className="message-subject">{message.subject}</span>
+                    {message.unread > 0 && <span className="unread-pill">{message.unread}</span>}
+                  </div>
                   <p>{message.preview}</p>
+                </button>
+              ))}
+            </div>
+
+            <div className="message-thread">
+              <div className="message-thread-header">
+                <div>
+                  <span className="message-thread-label">Conversation</span>
+                  <h4>{activeMessage?.from}</h4>
                 </div>
-                <div className="task-meta">
-                  {message.unread > 0 && <span className="unread-pill">{message.unread}</span>}
-                  <button type="button" className="action-button small" onClick={() => readMessage(message.id)}>Reply</button>
+                <span className="mini-tag">{activeMessage?.subject}</span>
+              </div>
+
+              <div className="message-thread-body">
+                <div className="thread-bubble incoming">
+                  <strong>{activeMessage?.from}</strong>
+                  <p>{activeMessage?.preview}</p>
+                </div>
+                <div className="thread-bubble outgoing">
+                  <strong>You</strong>
+                  <p>{replyText.trim() || 'Reply to confirm the next action or update the tenant.'}</p>
                 </div>
               </div>
-            ))}
+
+              <div className="message-reply-box">
+                <textarea
+                  rows="4"
+                  value={replyText}
+                  onChange={(event) => setReplyText(event.target.value)}
+                  placeholder="Type a reply..."
+                />
+                <div className="message-actions">
+                  <button type="button" className="ghost-btn" onClick={() => setReplyText('')}>Clear</button>
+                  <button type="button" className="action-button primary" onClick={sendReply}>Send reply</button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )
