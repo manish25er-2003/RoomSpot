@@ -170,6 +170,7 @@ function DashboardPage({ role, user, onLogout }) {
     : ['Overview', 'My room', 'Payments', 'Complaints', 'Messages']
 
   const [activeSection, setActiveSection] = useState('Overview')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [stayRecords, setStayRecords] = useState([])
   const [serverTenants, setServerTenants] = useState(null)
   const [availableRooms, setAvailableRooms] = useState([])
@@ -1234,8 +1235,8 @@ function DashboardPage({ role, user, onLogout }) {
   }
 
   return (
-    <div className="dashboard-shell">
-      <aside className="dashboard-sidebar">
+    <div className={`dashboard-shell ${sidebarOpen ? 'sidebar-open' : ''}`}>
+      <aside className={`dashboard-sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="dashboard-sidebar-inner">
           <div className="dashboard-brand">
             <div className="brand-mark compact-mark">
@@ -1265,7 +1266,10 @@ function DashboardPage({ role, user, onLogout }) {
                 key={item}
                 type="button"
                 className={`nav-item ${activeSection === item ? 'active' : ''}`}
-                onClick={() => setActiveSection(item)}
+                onClick={() => {
+                  setActiveSection(item)
+                  setSidebarOpen(false)
+                }}
               >
                 <span>{item === 'Overview' ? '▦' : item === 'Rooms' || item === 'My room' ? '⌂' : item === 'Payments' || item === 'Rent & payments' ? '₹' : item === 'Messages' ? '▢' : item === 'Complaints' ? '▤' : '♙'}</span>
                 {item}
@@ -1285,7 +1289,7 @@ function DashboardPage({ role, user, onLogout }) {
       <main className="dashboard-main">
         <header className="dashboard-topbar">
           <div className="topbar-left">
-            <button type="button" className="menu-btn" aria-label="Open menu">☰</button>
+            <button type="button" className="menu-btn" aria-label="Toggle menu" onClick={() => setSidebarOpen(!sidebarOpen)}>☰</button>
             <div className="breadcrumb">Workspace <span>/</span> <b>{isAdmin ? 'Admin dashboard' : 'Dashboard'}</b></div>
           </div>
 
