@@ -172,6 +172,16 @@ function DashboardPage({ role, user, onLogout }) {
   const [activeSection, setActiveSection] = useState('Overview')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [stayRecords, setStayRecords] = useState([])
+
+  const getNavLabel = (item) => {
+    if (item === 'Rent & payments') return 'Pay'
+    if (item === 'Payments') return 'Pay'
+    if (item === 'Messages') return 'Msg'
+    if (item === 'Complaints') return 'Issues'
+    if (item === 'My room') return 'Room'
+    if (item === 'Tenants') return 'Tenants'
+    return item
+  }
   const [serverTenants, setServerTenants] = useState(null)
   const [availableRooms, setAvailableRooms] = useState([])
   const [serverPayments, setServerPayments] = useState(null)
@@ -1169,6 +1179,16 @@ function DashboardPage({ role, user, onLogout }) {
               <h3>Messages</h3>
               <p>{isAdmin ? 'Owner and tenant updates' : 'Recent updates from your manager'}</p>
             </div>
+            <button
+              type="button"
+              className="action-button primary"
+              onClick={() => {
+                setActiveSection('Complaints')
+                setShowComplaintForm(true)
+              }}
+            >
+              New complaint
+            </button>
           </div>
 
           <div className="messages-panel">
@@ -1265,6 +1285,7 @@ function DashboardPage({ role, user, onLogout }) {
               <button
                 key={item}
                 type="button"
+                data-nav-item={item}
                 className={`nav-item ${activeSection === item ? 'active' : ''}`}
                 onClick={() => {
                   setActiveSection(item)
@@ -1272,7 +1293,7 @@ function DashboardPage({ role, user, onLogout }) {
                 }}
               >
                 <span>{item === 'Overview' ? '▦' : item === 'Rooms' || item === 'My room' ? '⌂' : item === 'Payments' || item === 'Rent & payments' ? '₹' : item === 'Messages' ? '▢' : item === 'Complaints' ? '▤' : '♙'}</span>
-                {item}
+                <span className="nav-text">{getNavLabel(item)}</span>
               </button>
             ))}
           </nav>
@@ -1289,7 +1310,6 @@ function DashboardPage({ role, user, onLogout }) {
       <main className="dashboard-main">
         <header className="dashboard-topbar">
           <div className="topbar-left">
-            <button type="button" className="menu-btn" aria-label="Toggle menu" onClick={() => setSidebarOpen(!sidebarOpen)}>☰</button>
             <div className="breadcrumb">Workspace <span>/</span> <b>{isAdmin ? 'Admin dashboard' : 'Dashboard'}</b></div>
           </div>
 
