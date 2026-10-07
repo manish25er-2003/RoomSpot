@@ -45,24 +45,36 @@ const aiTools = [
 const projects = [
   {
     title: 'Job Portal Platform',
-    description: 'A comprehensive job search platform where candidates can discover opportunities, apply for roles, and employers can share openings. Features include advanced filtering, saved jobs, and application tracking.',
+    description: 'A comprehensive hiring platform connecting job seekers with employers through smart filters, profile management, and a seamless application journey.',
     stack: ['React', 'Express', 'MongoDB'],
     image: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=800&q=80',
     link: 'https://github.com/manish25er-2003/',
+    accent: 'rgba(99, 102, 241, 0.18)',
   },
   {
     title: 'RoomSpot - Rental Platform',
-    description: 'A complete room rental management system where tenants can search properties, manage bookings, and administrators oversee payments and activity. Built with modern web stack.',
+    description: 'A modern room rental experience for tenants and owners featuring listings, search, bookings, and administrative workflow management.',
     stack: ['React', 'Express', 'MongoDB'],
     image: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=800&q=80',
     link: 'https://github.com/manish25er-2003/',
+    accent: 'rgba(6, 182, 212, 0.18)',
   },
   {
     title: 'SmartBank Systems',
-    description: 'A secure banking application with user authentication, account management, and real-time transaction processing. Features encryption and comprehensive security protocols.',
+    description: 'A secure banking application with authentication, financial account management, and transaction controls designed for reliability.',
     stack: ['Java', 'MySQL', 'Swing'],
     image: 'https://images.unsplash.com/photo-1563013544-824b1adac3e9?auto=format&fit=crop&w=800&q=80',
     link: 'https://github.com/mainshKumar50/SmartBanksys/tree/master',
+    accent: 'rgba(168, 85, 247, 0.18)',
+  },
+  {
+    title: 'Client Portal Dashboard',
+    description: 'A premium dashboard concept for service-based businesses, focusing on user insights, performance views, leads, and a polished product experience.',
+    stack: ['UI Design', 'React', 'Concept'],
+    image: null,
+    link: '#contact',
+    accent: 'rgba(45, 212, 191, 0.18)',
+    isDummy: true,
   },
 ]
 
@@ -108,7 +120,7 @@ const education = [
   },
 ]
 
-const rotatingHeroPhrases = ['Software Developer', 'Frontend Engineer', 'Full Stack Engineer']
+const rotatingHeroPhrases = ['Full Stack Developer Engineer', 'Software Developer Engineer']
 
 function TypewriterText({ phrases }) {
   const [displayText, setDisplayText] = useState('')
@@ -218,6 +230,79 @@ export default function PortfolioPage() {
           transform: translateY(-4px);
           box-shadow: 0 10px 30px -10px rgba(99, 102, 241, 0.2);
         }
+
+        .portfolio-desktop-nav {
+          display: flex;
+          align-items: center;
+          gap: 32px;
+        }
+
+        .portfolio-mobile-header-actions {
+          display: none;
+          align-items: center;
+          gap: 10px;
+        }
+
+        .portfolio-mobile-hire-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0.7rem 0.9rem;
+          border-radius: 12px;
+          background: linear-gradient(135deg, #6366f1, #06b6d4);
+          color: #fff;
+          text-decoration: none;
+          font-size: 0.76rem;
+          font-weight: 700;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          box-shadow: 0 8px 20px rgba(99, 102, 241, 0.28);
+        }
+
+        .portfolio-mobile-menu-toggle {
+          display: none;
+          align-items: center;
+          justify-content: center;
+          width: 42px;
+          height: 42px;
+          border-radius: 12px;
+          border: 1px solid rgba(148, 163, 184, 0.28);
+          background: rgba(15, 23, 42, 0.45);
+          color: #e2e8f0;
+          cursor: pointer;
+          font-size: 18px;
+          transition: all 0.2s ease;
+        }
+
+        .portfolio-mobile-menu-toggle:hover {
+          border-color: rgba(96, 165, 250, 0.4);
+          background: rgba(30, 41, 59, 0.7);
+          color: #7dd3fc;
+        }
+
+        .portfolio-mobile-nav {
+          display: none;
+          flex-direction: column;
+          gap: 8px;
+          padding-top: 12px;
+          border-top: 1px solid rgba(148, 163, 184, 0.18);
+        }
+
+        .portfolio-mobile-nav-link {
+          display: block;
+          padding: 10px 12px;
+          border-radius: 10px;
+          background: rgba(15, 23, 42, 0.5);
+          color: rgba(226, 232, 240, 0.9);
+          text-decoration: none;
+          font-size: 0.92rem;
+          font-weight: 600;
+        }
+
+        .portfolio-mobile-nav-link:hover {
+          background: rgba(30, 41, 59, 0.8);
+          color: #ffffff;
+        }
         
         .text-gradient {
           background: linear-gradient(135deg, #6366F1 0%, #3B82F6 50%, #06B6D4 100%);
@@ -273,6 +358,32 @@ export default function PortfolioPage() {
           border-color: rgba(99, 102, 241, 0.5);
           box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
         }
+
+        @media (min-width: 768px) {
+          .portfolio-mobile-header-actions,
+          .portfolio-mobile-menu-toggle,
+          .portfolio-mobile-nav {
+            display: none !important;
+          }
+        }
+
+        @media (max-width: 767px) {
+          .portfolio-desktop-nav {
+            display: none !important;
+          }
+
+          .portfolio-mobile-header-actions {
+            display: flex !important;
+          }
+
+          .portfolio-mobile-menu-toggle {
+            display: inline-flex !important;
+          }
+
+          .portfolio-mobile-nav {
+            display: flex !important;
+          }
+        }
       `}</style>
 
       {/* Header */}
@@ -318,10 +429,7 @@ export default function PortfolioPage() {
             </span>
           </a>
 
-          <nav style={{
-            display: 'flex',
-            gap: '32px',
-          }} className="hidden md:flex">
+          <nav className="portfolio-desktop-nav" style={{ gap: '32px' }}>
             {portfolioNav.map((item) => (
               <a
                 key={item.label}
@@ -341,21 +449,49 @@ export default function PortfolioPage() {
             ))}
           </nav>
 
-          <button
-            onClick={() => setMenuOpen(!menuOpen)}
-            style={{
-              display: 'block',
-              background: 'none',
-              border: 'none',
-              color: '#cbd5e1',
-              cursor: 'pointer',
-              fontSize: '20px',
-            }}
-            className="md:hidden"
-          >
-            <i className={`fa-solid ${menuOpen ? 'fa-xmark' : 'fa-bars'}`} />
-          </button>
+          <div className="portfolio-mobile-header-actions">
+            <a href="#contact" className="portfolio-mobile-hire-btn" onClick={() => setMenuOpen(false)}>
+              Hire Me
+            </a>
+            <button
+              type="button"
+              aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen(!menuOpen)}
+              className="portfolio-mobile-menu-toggle"
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#cbd5e1',
+                cursor: 'pointer',
+                fontSize: '20px',
+              }}
+            >
+              <i className={`fa-solid ${menuOpen ? 'fa-xmark' : 'fa-bars'}`} />
+            </button>
+          </div>
         </div>
+
+        {menuOpen && (
+          <div style={{
+            maxWidth: '1280px',
+            margin: '0 auto',
+            padding: '0 24px 16px',
+          }}>
+            <nav className="portfolio-mobile-nav" aria-label="Mobile navigation" style={{ display: 'flex' }}>
+              {portfolioNav.map((item) => (
+                <a
+                  key={item.label}
+                  href={item.href}
+                  className="portfolio-mobile-nav-link"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  {item.label}
+                </a>
+              ))}
+            </nav>
+          </div>
+        )}
       </header>
 
       <main style={{ position: 'relative', zIndex: 10 }}>
@@ -1179,189 +1315,130 @@ export default function PortfolioPage() {
             </div>
 
             <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '48px',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+              gap: '28px',
             }}>
-              {projects.map((project, idx) => (
+              {projects.map((project) => (
                 <div
                   key={project.title}
                   className="glass-card"
                   style={{
-                    borderRadius: '32px',
-                    padding: '32px',
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-                    gap: '48px',
-                    alignItems: 'center',
-                    border: idx === 0 ? '1px solid rgba(99, 102, 241, 0.3)' : idx === 1 ? '1px solid rgba(6, 182, 212, 0.3)' : '1px solid rgba(255, 255, 255, 0.08)',
+                    borderRadius: '28px',
+                    padding: '24px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '18px',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    background: `linear-gradient(180deg, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.75))`,
+                    boxShadow: '0 18px 40px rgba(15, 23, 42, 0.24)',
                   }}
                 >
-                  {idx % 2 === 0 ? (
-                    <>
-                      <div style={{
-                        borderRadius: '16px',
-                        overflow: 'hidden',
-                        aspectRatio: '4/3',
-                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '12px',
+                  }}>
+                    <span style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      padding: '6px 10px',
+                      borderRadius: '999px',
+                      background: project.accent,
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      color: '#e2e8f0',
+                      fontSize: '11px',
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      fontWeight: 700,
+                    }}>
+                      {project.isDummy ? 'Dummy Project' : 'Featured'}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', flex: 1 }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '12px',
+                    }}>
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        padding: '6px 10px',
+                        borderRadius: '999px',
+                        background: 'rgba(148, 163, 184, 0.1)',
+                        border: '1px solid rgba(148, 163, 184, 0.18)',
+                        color: '#cbd5e1',
+                        fontSize: '11px',
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        fontWeight: 700,
                       }}>
-                        <img
-                          src={project.image}
-                          alt={project.title}
+                        {project.isDummy ? 'Concept' : 'Featured'}
+                      </span>
+                    </div>
+
+                    <h4 style={{ fontSize: '22px', fontWeight: '700', color: 'white', margin: 0, lineHeight: 1.3 }}>
+                      {project.title}
+                    </h4>
+
+                    <p style={{
+                      fontSize: '15px',
+                      color: '#cbd5e1',
+                      lineHeight: 1.7,
+                      margin: 0,
+                    }}>
+                      {project.description}
+                    </p>
+
+                    <div style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: '8px',
+                      marginTop: '4px',
+                    }}>
+                      {project.stack.map((tech) => (
+                        <span
+                          key={tech}
                           style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                            transition: 'transform 0.5s ease',
+                            fontSize: '11px',
+                            padding: '7px 10px',
+                            background: 'rgba(99, 102, 241, 0.08)',
+                            border: '1px solid rgba(99, 102, 241, 0.18)',
+                            borderRadius: '999px',
+                            color: '#dbeafe',
+                            fontWeight: 600,
                           }}
-                          onMouseEnter={(e) => e.target.style.transform = 'scale(1.05)'}
-                          onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
-                        />
-                      </div>
-                      <div style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'center',
-                        gap: '16px',
-                      }}>
-                        <h4 style={{ fontSize: '24px', fontWeight: 'bold', color: 'white', margin: 0 }}>
-                          {project.title}
-                        </h4>
-                        <p style={{
-                          fontSize: '16px',
-                          color: '#cbd5e1',
-                          lineHeight: 1.6,
-                          margin: 0,
-                        }}>
-                          {project.description}
-                        </p>
-                        <div style={{
-                          display: 'flex',
-                          flexWrap: 'wrap',
-                          gap: '8px',
-                          paddingTop: '8px',
-                        }}>
-                          {project.stack.map((tech) => (
-                            <span
-                              key={tech}
-                              style={{
-                                fontSize: '12px',
-                                padding: '6px 12px',
-                                background: 'rgba(99, 102, 241, 0.1)',
-                                border: '1px solid rgba(99, 102, 241, 0.2)',
-                                borderRadius: '8px',
-                                color: '#a5d6ff',
-                              }}
-                            >
-                              {tech}
-                            </span>
-                          ))}
-                        </div>
-                        <a
-                          href={project.link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            fontSize: '14px',
-                            fontWeight: '600',
-                            color: '#06b6d4',
-                            textDecoration: 'none',
-                            marginTop: '8px',
-                            transition: 'gap 0.3s',
-                          }}
-                          onMouseEnter={(e) => e.target.style.gap = '12px'}
-                          onMouseLeave={(e) => e.target.style.gap = '8px'}
                         >
-                          View Project <i className="fa-solid fa-arrow-right" />
-                        </a>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'center',
-                        gap: '16px',
-                      }}>
-                        <h4 style={{ fontSize: '24px', fontWeight: 'bold', color: 'white', margin: 0 }}>
-                          {project.title}
-                        </h4>
-                        <p style={{
-                          fontSize: '16px',
-                          color: '#cbd5e1',
-                          lineHeight: 1.6,
-                          margin: 0,
-                        }}>
-                          {project.description}
-                        </p>
-                        <div style={{
-                          display: 'flex',
-                          flexWrap: 'wrap',
-                          gap: '8px',
-                          paddingTop: '8px',
-                        }}>
-                          {project.stack.map((tech) => (
-                            <span
-                              key={tech}
-                              style={{
-                                fontSize: '12px',
-                                padding: '6px 12px',
-                                background: 'rgba(6, 182, 212, 0.1)',
-                                border: '1px solid rgba(6, 182, 212, 0.2)',
-                                borderRadius: '8px',
-                                color: '#a5f3fc',
-                              }}
-                            >
-                              {tech}
-                            </span>
-                          ))}
-                        </div>
-                        <a
-                          href={project.link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            fontSize: '14px',
-                            fontWeight: '600',
-                            color: '#06b6d4',
-                            textDecoration: 'none',
-                            marginTop: '8px',
-                            transition: 'gap 0.3s',
-                          }}
-                          onMouseEnter={(e) => e.target.style.gap = '12px'}
-                          onMouseLeave={(e) => e.target.style.gap = '8px'}
-                        >
-                          View Project <i className="fa-solid fa-arrow-right" />
-                        </a>
-                      </div>
-                      <div style={{
-                        borderRadius: '16px',
-                        overflow: 'hidden',
-                        aspectRatio: '4/3',
-                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
-                      }}>
-                        <img
-                          src={project.image}
-                          alt={project.title}
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                            transition: 'transform 0.5s ease',
-                          }}
-                          onMouseEnter={(e) => e.target.style.transform = 'scale(1.05)'}
-                          onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
-                        />
-                      </div>
-                    </>
-                  )}
+                          {tech}
+                        </span>
+                      ))}
+                    </div>
+
+                    <a
+                      href={project.link}
+                      target={project.link.startsWith('http') ? '_blank' : '_self'}
+                      rel={project.link.startsWith('http') ? 'noopener noreferrer' : ''}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        fontSize: '14px',
+                        fontWeight: '700',
+                        color: '#7dd3fc',
+                        textDecoration: 'none',
+                        marginTop: 'auto',
+                        transition: 'gap 0.3s ease',
+                      }}
+                      onMouseEnter={(e) => e.target.style.gap = '12px'}
+                      onMouseLeave={(e) => e.target.style.gap = '8px'}
+                    >
+                      View Project <i className="fa-solid fa-arrow-right" />
+                    </a>
+                  </div>
                 </div>
               ))}
             </div>
@@ -1550,7 +1627,7 @@ export default function PortfolioPage() {
                 gap: '20px',
               }}>
                 {[
-                  { icon: 'fa-envelope', label: 'Email', value: 'manishkumar25er@gmail.com', link: 'mailto:manishkumar25er@gmail.com' },
+                  { icon: 'fa-envelope', label: 'Email', value: 'manish25er@gmail.com', link: 'mailto:manish25er@gmail.com' },
                   { icon: 'fa-phone', label: 'Phone', value: '+91 70873 38600', link: 'tel:+917087338600' },
                   { icon: 'fa-github', label: 'GitHub', value: 'github.com/manish25er', link: 'https://github.com/manish25er' },
                   { icon: 'fa-linkedin', label: 'LinkedIn', value: 'linkedin.com/in/manish-kumar', link: 'https://linkedin.com/in/manish-kumar' },
@@ -1560,11 +1637,11 @@ export default function PortfolioPage() {
                     cursor: 'pointer',
                   }} rel={contact.link.startsWith('http') ? 'noopener noreferrer' : ''}>
                     <div className="glass-card" style={{
-                      padding: '24px',
+                      padding: '22px 20px',
                       borderRadius: '14px',
                       display: 'flex',
-                      gap: '16px',
-                      alignItems: 'flex-start',
+                      gap: '14px',
+                      alignItems: 'center',
                       transition: 'all 0.3s ease',
                     }}
                     onMouseEnter={(e) => {
@@ -1581,6 +1658,7 @@ export default function PortfolioPage() {
                       <div style={{
                         width: '48px',
                         height: '48px',
+                        minWidth: '48px',
                         borderRadius: '10px',
                         background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(6, 182, 212, 0.15))',
                         display: 'flex',
@@ -1590,10 +1668,11 @@ export default function PortfolioPage() {
                         color: '#6366f1',
                         flexShrink: 0,
                         border: '1px solid rgba(99, 102, 241, 0.2)',
+                        boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.04)',
                       }}>
                         <i className={`fa-solid ${contact.icon}`} />
                       </div>
-                      <div style={{ flex: 1 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{
                           fontSize: '12px',
                           color: '#94a3b8',
@@ -1609,7 +1688,8 @@ export default function PortfolioPage() {
                           color: 'white',
                           margin: '8px 0 0 0',
                           fontWeight: '600',
-                          wordBreak: 'break-all',
+                          overflowWrap: 'anywhere',
+                          wordBreak: 'break-word',
                         }}>
                           {contact.value}
                         </p>

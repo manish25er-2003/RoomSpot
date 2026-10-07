@@ -670,10 +670,13 @@ select:focus-visible {
 .property-card {
   background: var(--white);
   border: 1px solid var(--border);
-  border-radius: 22px;
+  border-radius: 12px;
   overflow: hidden;
   box-shadow: var(--soft-shadow);
   transition: transform 0.28s ease, box-shadow 0.28s ease;
+  min-height: 272px;
+  display: flex;
+  flex-direction: column;
 }
 
 .property-card:hover {
@@ -683,8 +686,17 @@ select:focus-visible {
 
 .property-image-wrap {
   position: relative;
-  height: 200px;
+  height: 158px;
   overflow: hidden;
+  border-radius: 12px 12px 0 0;
+}
+
+.property-image-wrap::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.24));
+  pointer-events: none;
 }
 
 .property-image-wrap img {
@@ -718,7 +730,10 @@ select:focus-visible {
 }
 
 .property-card-content {
-  padding: 12px 14px 14px;
+  padding: 9px 11px 11px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
 }
 
 .property-meta-top {
@@ -726,7 +741,7 @@ select:focus-visible {
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .property-type {
@@ -742,29 +757,34 @@ select:focus-visible {
 .property-price {
   color: var(--navy);
   font-weight: 800;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
 }
 
 .property-card h3 {
   margin: 0 0 4px;
-  font-size: 1.04rem;
+  font-size: 0.96rem;
   color: var(--navy);
-  line-height: 1.35;
+  line-height: 1.25;
 }
 
 .property-location {
-  margin: 0 0 8px;
+  margin: 0 0 6px;
   color: var(--muted);
   font-weight: 600;
-  font-size: 0.82rem;
+  font-size: 0.76rem;
 }
 
 .property-description {
-  margin: 0 0 12px;
+  margin: 0 0 8px;
   color: var(--muted);
-  line-height: 1.55;
-  min-height: 42px;
-  font-size: 0.82rem;
+  line-height: 1.35;
+  min-height: 1.35em;
+  font-size: 0.76rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .secondary-btn {
@@ -790,7 +810,33 @@ select:focus-visible {
 
 .property-button {
   width: 100%;
-  margin-top: 6px;
+  margin-top: auto;
+  font-size: 0.78rem;
+  padding: 0.68rem 0.9rem;
+}
+
+@media (max-width: 640px) {
+  .property-grid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+  }
+
+  .property-card {
+    min-height: 270px;
+  }
+
+  .property-image-wrap {
+    height: 150px;
+  }
+
+  .property-card-content {
+    padding: 12px 12px 12px;
+  }
+
+  .property-button {
+    font-size: 0.76rem;
+    padding: 0.6rem 0.8rem;
+  }
 }
 
 .property-modal-backdrop {

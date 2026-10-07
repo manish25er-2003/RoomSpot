@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react'
 import Header from '../components/Header'
 import SearchBar from '../components/SearchBar'
-import FeatureCard from '../components/FeatureCard'
 import PropertyCard from '../components/PropertyCard'
 import StepCard from '../components/StepCard'
 import Footer from '../components/Footer'
-import { propertyData, featureData, steps } from '../data/properties'
+import { propertyData, steps } from '../data/properties'
 
 export default function Home({ onLogin, onRegister, onListProperty }) {
   const [filters, setFilters] = useState({ location: '', type: '', budget: '' })
@@ -136,27 +135,6 @@ export default function Home({ onLogin, onRegister, onListProperty }) {
           </section>
         )}
 
-        <section className="section features-section">
-          <div className="container">
-            <div className="section-heading">
-              <div className="eyebrow eyebrow-dark">Why choose RoomSpot</div>
-              <h2>Why Choose RoomSpot?</h2>
-              <p>Everything you need to find the right rental place in one simple platform.</p>
-            </div>
-
-            <div className="feature-grid">
-              {featureData.map((feature) => (
-                <FeatureCard
-                  key={feature.title}
-                  icon={feature.icon}
-                  title={feature.title}
-                  description={feature.description}
-                />
-              ))}
-            </div>
-          </div>
-        </section>
-
         <section className="section listings-section">
           <div className="container">
             <div className="section-heading split-heading">
@@ -196,21 +174,6 @@ export default function Home({ onLogin, onRegister, onListProperty }) {
           </div>
         </section>
 
-        <section className="owner-section">
-          <div className="container owner-inner">
-            <div>
-              <div className="eyebrow eyebrow-light">For property owners</div>
-              <h2>Have a Room or Property to Rent?</h2>
-            </div>
-
-            <div className="owner-content">
-              <p>List your property on RoomSpot and connect with people looking for rooms and rental properties.</p>
-              <button type="button" className="primary-btn owner-btn" onClick={onListProperty || onRegister}>
-                List Your Property
-              </button>
-            </div>
-          </div>
-        </section>
       </main>
 
       {selectedProperty && (
