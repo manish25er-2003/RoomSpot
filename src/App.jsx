@@ -993,7 +993,15 @@ function DashboardPage({ role, user, onLogout }) {
 
               <div className="tenant-payment-action">
                 {hasPendingTenantPayment ? (
-                  <button type="button" className="action-button primary pay-row-button" onClick={handleTenantPaymentRowPay}>Pay Now</button>
+                  <button type="button" className="action-button primary pay-row-button" onClick={handleTenantPaymentRowPay}>
+                    <span className="pay-icon" aria-hidden>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                        <rect x="1.5" y="5" width="21" height="14" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none" />
+                        <rect x="17" y="9" width="3" height="3" rx="0.6" fill="currentColor" />
+                      </svg>
+                    </span>
+                    <span className="pay-label">Pay Now</span>
+                  </button>
                 ) : (
                   <span className="status-badge success pay-row-badge">Paid</span>
                 )}
@@ -1022,7 +1030,15 @@ function DashboardPage({ role, user, onLogout }) {
                   <span><em className={`status-badge ${normalized.status === 'Paid' ? 'success' : 'warning'}`}>{normalized.status}</em></span>
                   <span>
                     {normalized.status === 'Pending' ? (
-                      <button type="button" className="action-button small" onClick={() => handleTenantPayNow(payment)}>Pay Now</button>
+                      <button type="button" className="action-button small" onClick={() => handleTenantPayNow(payment)}>
+                        <span className="pay-icon" aria-hidden>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                            <rect x="1.5" y="5" width="21" height="14" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none" />
+                            <rect x="17" y="9" width="3" height="3" rx="0.6" fill="currentColor" />
+                          </svg>
+                        </span>
+                        <span className="pay-label">Pay Now</span>
+                      </button>
                     ) : (
                       <span className="muted-label">Completed</span>
                     )}

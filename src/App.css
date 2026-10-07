@@ -1127,12 +1127,13 @@ select:focus-visible {
   }
 
   .footer-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 22px 16px;
+    display: grid;
+    grid-template-columns: 220px 1fr 1fr; /* fixed brand column, two balanced columns */
+    gap: 18px 20px;
   }
 
   .footer-brand-block {
-    grid-column: 1 / -1;
+    grid-column: 1 / 2;
   }
 
   .footer-brand-block p {
@@ -3020,7 +3021,8 @@ select:focus-visible {
 
 .tenant-payment-item,
 .tenant-payment-total {
-  min-width: 148px;
+  flex: 1 1 45%; /* allow two items per row on narrow screens */
+  min-width: 140px;
   background: #eef4ff;
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 12px;
@@ -3029,6 +3031,16 @@ select:focus-visible {
   flex-direction: column;
   justify-content: center;
   gap: 6px;
+}
+
+.tenant-payment-item {
+  box-shadow: 0 8px 18px rgba(15,23,42,0.04);
+  background: linear-gradient(180deg, #f7fbff 0%, #eef6ff 100%);
+}
+
+.tenant-payment-total {
+  box-shadow: 0 8px 20px rgba(37,99,235,0.04);
+  background: linear-gradient(180deg, #eef6ff 0%, #e6f3ff 100%);
 }
 
 .tenant-payment-label,
@@ -3043,8 +3055,13 @@ select:focus-visible {
 
 .tenant-payment-item strong,
 .tenant-payment-total strong {
-  font-size: 1.08rem;
+  font-size: 1.12rem;
   color: var(--navy);
+}
+
+.tenant-payment-item,
+.tenant-payment-total {
+  font-size: 0.95rem; /* slightly smaller for realistic compact look */
 }
 
 .tenant-payment-total {
@@ -3053,25 +3070,90 @@ select:focus-visible {
 }
 
 .tenant-payment-action {
-  margin-left: auto;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex: 1 1 100%;
+  margin-left: 0; /* let it flow below items when needed */
+}
+
+/* Desktop: keep items in a row and pin action to the right for a realistic dashboard look */
+@media (min-width: 760px) {
+  .tenant-payment-row {
+    flex-wrap: nowrap;
+    align-items: center;
+  }
+
+  .tenant-payment-item,
+  .tenant-payment-total {
+    flex: 0 0 140px;
+  }
+
+  .tenant-payment-action {
+    margin-left: auto;
+    flex: 0 0 auto;
+  }
 }
 
 .pay-row-button {
-  min-width: 142px;
+  width: 100%;
+  max-width: 220px;
   min-height: 48px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #1d4ed8, #1e3a8a);
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 60%, #1e40af 100%);
   color: #fff;
   font-weight: 800;
   letter-spacing: 0.02em;
   box-shadow: 0 12px 22px rgba(37, 99, 235, 0.2);
 }
 
+.pay-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-right: 8px;
+  background: rgba(255,255,255,0.12);
+  border-radius: 8px;
+  font-weight: 800;
+}
+
+.pay-icon svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+  color: #fff;
+}
+
+.pay-label {
+  display: inline-block;
+}
+
+/* small variant for table rows */
+.action-button.small .pay-icon {
+  width: 20px;
+  height: 20px;
+  margin-right: 6px;
+  font-size: 0.78rem;
+}
+
+/* make label hide on very small screens to save space */
+@media (max-width: 420px) {
+  .pay-label { display: none; }
+  .pay-row-button { max-width: 160px; }
+}
+
 .pay-row-button:hover {
   box-shadow: 0 16px 28px rgba(37, 99, 235, 0.26);
+}
+
+/* Make the button feel more tactile on touch devices */
+@media (hover: none) {
+  .pay-row-button {
+    transform: translateY(0);
+    box-shadow: 0 10px 18px rgba(37,99,235,0.18);
+  }
 }
 
 .pay-row-badge {
@@ -3085,6 +3167,31 @@ select:focus-visible {
   font-weight: 800;
   background: rgba(34, 197, 94, 0.15);
   color: #15803d;
+}
+
+/* Make sure payment row items show two per row on small screens */
+@media (max-width: 520px) {
+  .tenant-payment-row {
+    gap: 10px;
+  }
+
+  .tenant-payment-item,
+  .tenant-payment-total {
+    flex: 1 1 48%;
+  }
+
+  .tenant-payment-action {
+    flex: 1 1 100%;
+    display: flex;
+    justify-content: center;
+    margin-top: 6px;
+  }
+
+  .pay-row-button,
+  .pay-row-badge {
+    max-width: 100%;
+    width: 100%;
+  }
 }
 
 .stats-grid {
@@ -3849,7 +3956,7 @@ select:focus-visible {
 
 .messages-panel {
   display: grid;
-  grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.4fr);
+  grid-template-columns: minmax(220px, 0.9fr) minmax(0, 1.4fr);
   gap: 18px;
   min-height: 420px;
 }
@@ -3863,8 +3970,8 @@ select:focus-visible {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 14px 12px;
+  gap: 6px;
+  padding: 12px 10px;
   border-radius: 14px;
   border: 1px solid #edf2f7;
   background: #f8fafc;
