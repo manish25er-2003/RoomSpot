@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Payment receipt">
+  <defs>
+    <linearGradient id="g" x1="0" x2="1">
+      <stop offset="0" stop-color="#fff" />
+      <stop offset="1" stop-color="#f0f9ff" />
+    </linearGradient>
+  </defs>
+
+  <!-- background circle -->
+  <circle cx="60" cy="60" r="58" fill="#eef7ff" />
+
+  <!-- receipt body -->
+  <g transform="translate(28,18)">
+    <rect x="0" y="6" width="64" height="84" rx="6" fill="url(#g)" stroke="#dbeafe" stroke-width="1.5" />
+    <!-- zigzag bottom -->
+    <path d="M0 78 l4 -6 6 6 6 -6 6 6 6 -6 6 6 6 -6" fill="none" stroke="#dbeafe" stroke-width="1.6"/>
+
+    <!-- folded corner animation -->
+    <path id="fold" d="M56 6 L64 6 L64 14 Z" fill="#e6f0ff" stroke="#cfe7ff" stroke-width="1" >
+      <animate attributeName="transform" values="translate(0,0); translate(-2,1); translate(0,0)" dur="1.6s" repeatCount="indefinite" />
+    </path>
+
+    <!-- lines on receipt -->
+    <g fill="#0f172a" opacity="0.86">
+      <rect x="8" y="18" width="44" height="4" rx="2" />
+      <rect x="8" y="30" width="34" height="4" rx="2" />
+      <rect x="8" y="42" width="50" height="4" rx="2" />
+      <rect x="8" y="54" width="28" height="4" rx="2" />
+    </g>
+
+    <!-- amount bubble -->
+    <g transform="translate(8,64)">
+      <rect x="0" y="0" width="48" height="12" rx="6" fill="#2563eb" />
+      <text x="24" y="8.8" font-size="8" font-weight="700" fill="#fff" text-anchor="middle">₹3,000</text>
+      <animateTransform attributeName="transform" type="scale" values="1;1.06;1" dur="1.4s" repeatCount="indefinite" />
+    </g>
+  </g>
+
+  <!-- confetti pieces: simple shapes with staggered animation -->
+  <g id="confetti">
+    <rect x="20" y="10" width="4" height="8" rx="1" fill="#ffb020">
+      <animateTransform attributeName="transform" type="translate" values="0 0; 6 22; 0 40" dur="1.4s" repeatCount="indefinite" begin="0s"/>
+      <animateTransform attributeName="transform" type="rotate" values="0 30 22; 12 30 22; 0 30 22" dur="1.4s" additive="sum" repeatCount="indefinite" begin="0s"/>
+    </rect>
+
+    <circle cx="94" cy="18" r="3" fill="#10b981">
+      <animateTransform attributeName="transform" type="translate" values="0 0; -8 16; 0 36" dur="1.6s" repeatCount="indefinite" begin="0.18s"/>
+    </circle>
+
+    <rect x="70" y="6" width="3" height="6" rx="1" fill="#ef4444">
+      <animateTransform attributeName="transform" type="translate" values="0 0; -12 20; -4 36" dur="1.5s" repeatCount="indefinite" begin="0.28s"/>
+      <animateTransform attributeName="transform" type="rotate" values="0 -6 24; -30 -6 24; 0 -6 24" dur="1.5s" additive="sum" repeatCount="indefinite" begin="0.28s"/>
+    </rect>
+
+    <rect x="36" y="4" width="3" height="7" rx="1" fill="#60a5fa">
+      <animateTransform attributeName="transform" type="translate" values="0 0; 8 20; 2 36" dur="1.3s" repeatCount="indefinite" begin="0.08s"/>
+    </rect>
+  </g>
+
+  <!-- subtle drop shadow for depth -->
+  <ellipse cx="60" cy="102" rx="34" ry="6" fill="rgba(15,23,42,0.06)" />
+</svg>

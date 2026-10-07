@@ -4,6 +4,7 @@ import User from '../models/User.js'
 import Room from '../models/Room.js'
 import ActivityLog from '../models/ActivityLog.js'
 import {protect,allowRoles} from '../middleware/auth.js'
+
 const router=Router()
 router.get('/stays',protect,async(req,res,next)=>{try{const tenants=req.user.role==='admin'?await User.find({role:'tenant',room:{$ne:null}}).populate('room','number rent'):await User.find({_id:req.user._id,role:'tenant',room:{$ne:null}}).populate('room','number rent');const today=new Date();today.setHours(0,0,0,0);res.json({stays:tenants.filter(tenant=>tenant.room).map(tenant=>{const start=tenant.rentStartDate?new Date(tenant.rentStartDate):null;if(start)start.setHours(0,0,0,0);return{tenantId:tenant._id,tenantName:tenant.name,roomId:tenant.room._id,roomNumber:tenant.room.number,rentStartDate:tenant.rentStartDate||null,stayDays:start?Math.max(0,Math.floor((today-start)/86400000)):null}})})}catch(e){next(e)}})
 router.use(protect,allowRoles('admin'))

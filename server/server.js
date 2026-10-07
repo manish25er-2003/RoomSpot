@@ -1,5 +1,6 @@
 import 'dotenv/config'
 import express from 'express'
+import jwt from 'jsonwebtoken'
 import cors from 'cors'
 import mongoose from 'mongoose'
 import bcrypt from 'bcryptjs'
@@ -13,10 +14,14 @@ import complaintRoutes from './routes/complaints.js'
 import messageRoutes from './routes/messages.js'
 import notificationRoutes from './routes/notifications.js'
 import activityRoutes from './routes/activity.js'
+import { createServer } from 'http'
+import { Server as SocketIOServer } from 'socket.io'
 import settingsRoutes from './routes/settings.js'
 import {preparePaymentIndexes} from './utils/paymentIndexes.js'
 import { ensureCurrentMonthPaymentsForActiveTenants } from './utils/monthlyPayments.js'
 const app=express()
+const httpServer = createServer(app)
+let io = null
 const allowedOrigins = [
   process.env.CLIENT_URL,
   ...(process.env.CLIENT_URLS || '').split(',').map((origin) => origin.trim()).filter(Boolean),
@@ -59,6 +64,10 @@ app.use(cors({
   credentials: true,
 }))
 app.use(express.json({limit:'1mb'}))
+// serve uploaded files
+import path from 'path'
+const uploadsDir = path.join(process.cwd(), 'uploads')
+app.use('/uploads', express.static(uploadsDir))
 app.get('/api/health',(req,res)=>res.json({status:'ok',service:'Maish API'}))
 app.use('/api/auth',authRoutes);app.use('/api/rooms',roomRoutes);app.use('/api/users',userRoutes);app.use('/api/payments',paymentRoutes);app.use('/api/complaints',complaintRoutes);app.use('/api/messages',messageRoutes);app.use('/api/notifications',notificationRoutes);app.use('/api/activity',activityRoutes);app.use('/api/settings',settingsRoutes)
 app.use((req,res)=>res.status(404).json({message:'Route not found'}))
@@ -96,7 +105,36 @@ try {
     ensureCurrentMonthPaymentsForActiveTenants().catch((error) => console.error('Monthly payment sync failed:', error.message))
   }, 60 * 60 * 1000)
 
-  app.listen(port, '0.0.0.0', () => {
+  // start socket.io
+  io = new SocketIOServer(httpServer, {
+    cors: {
+      origin: allowedOrigins,
+      credentials: true,
+    },
+  })
+
+  io.on('connection', (socket) => {
+    console.log('Socket connected', socket.id)
+
+    // clients should emit 'identify' with their JWT token to join their personal room
+    socket.on('identify', (token) => {
+      try {
+        if (!token) return
+          const decoded = token && jwt.verify(token, process.env.JWT_SECRET)
+          if (decoded?.id) {
+            socket.join(decoded.id)
+          }
+      } catch (err) {
+        // ignore invalid tokens
+      }
+    })
+
+    socket.on('disconnect', () => console.log('Socket disconnected', socket.id))
+  })
+
+  app.set('io', io)
+
+  httpServer.listen(port, '0.0.0.0', () => {
     console.log(`Maish API running on http://0.0.0.0:${port}`)
   })
 } catch (err) {

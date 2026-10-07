@@ -4,6 +4,7 @@ import Home from './pages/Home'
 import PortfolioPage from './pages/PortfolioPage'
 import { getApiBaseCandidates } from './lib/apiConfig'
 import './App.css'
+import { io as ioClient } from 'socket.io-client'
 
 const AUTH_KEY = 'roomspot-auth'
 const API_BASES = getApiBaseCandidates()
@@ -166,8 +167,8 @@ function calculateStayDays(startDate, today) {
 function DashboardPage({ role, user, onLogout }) {
   const isAdmin = role === 'admin'
   const navItems = isAdmin
-    ? ['Overview', 'Rooms', 'Tenants', 'Rent & payments', 'Complaints', 'Messages']
-    : ['Overview', 'My room', 'Payments', 'Complaints', 'Messages']
+    ? ['Overview', 'Rooms', 'Tenants', 'Rent & payments', 'Complaints', 'Calendar', 'Messages']
+    : ['Overview', 'My room', 'Payments', 'Complaints', 'Calendar', 'Messages']
 
   const [activeSection, setActiveSection] = useState('Overview')
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -185,6 +186,13 @@ function DashboardPage({ role, user, onLogout }) {
   const [serverTenants, setServerTenants] = useState(null)
   const [availableRooms, setAvailableRooms] = useState([])
   const [serverPayments, setServerPayments] = useState(null)
+  const [toastMessage, setToastMessage] = useState('')
+  const [showToast, setShowToast] = useState(false)
+  const [demoTenantId, setDemoTenantId] = useState('')
+  const [animatedPaymentId, setAnimatedPaymentId] = useState(null)
+  const [showCelebration, setShowCelebration] = useState(false)
+  const [expandedPaymentId, setExpandedPaymentId] = useState(null)
+  const [showSad, setShowSad] = useState(false)
   const [today, setToday] = useState(() => new Date())
   const [showTenantForm, setShowTenantForm] = useState(false)
   const [tenantForm, setTenantForm] = useState({ name: '', email: '', password: '', phone: '', roomId: '' })
@@ -222,6 +230,135 @@ function DashboardPage({ role, user, onLogout }) {
     { id: 2, name: 'Room 201', type: '1BHK', status: 'Available', rent: '₹18,500', occupancy: '100%' },
     { id: 3, name: 'PG Floor', type: 'Shared room', status: 'Occupied', rent: '₹7,500', occupancy: '88%' },
   ])
+
+  const [showAddRoomForm, setShowAddRoomForm] = useState(false)
+  const [roomForm, setRoomForm] = useState({ number: '', type: 'Private room', rent: '', status: 'Available' })
+
+  const handleRoomFormChange = (e) => {
+    const { name, value } = e.target
+    setRoomForm((cur) => ({ ...cur, [name]: value }))
+  }
+
+  const handleAddRoom = async (event) => {
+    event.preventDefault()
+    const token = readAuth().token
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+    try {
+      const response = await fetchWithApiFallback('/rooms', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ number: roomForm.number, type: roomForm.type, rent: Number(roomForm.rent || 0), status: roomForm.status }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        window.alert(data?.message || 'Unable to add room')
+        return
+      }
+
+      // refresh rooms from server
+      const roomsResp = await fetchWithApiFallback('/rooms', { headers })
+      if (roomsResp.ok) {
+        const list = (await roomsResp.json()).rooms || []
+        setRooms(list.map((room) => ({ id: room._id, name: room.number, type: room.type, status: room.status, rent: `₹${Number(room.rent || 0).toLocaleString('en-IN')}` })))
+      }
+
+      setRoomForm({ number: '', type: 'Private room', rent: '', status: 'Available' })
+      setShowAddRoomForm(false)
+      window.alert('Room added successfully')
+    } catch (err) {
+      window.alert('Unable to reach server. Check backend.')
+    }
+  }
+
+  // Assign room modal state
+  const [assignModalOpen, setAssignModalOpen] = useState(false)
+  const [assignRoomId, setAssignRoomId] = useState(null)
+  const [assignForm, setAssignForm] = useState({ tenantId: '', rent: '', rentStartDate: '' })
+
+  const openAssignModal = (room) => {
+    const parsedRent = room && room.rent ? Number(String(room.rent).replace(/[^0-9]/g, '')) : ''
+    setAssignRoomId(room?.id || null)
+    setAssignForm({ tenantId: '', rent: parsedRent || '', rentStartDate: '' })
+    setAssignModalOpen(true)
+  }
+
+  const openAssignToTenant = (tenant) => {
+    setAssignRoomId(null)
+    setAssignForm({ tenantId: tenant._id || tenant.id || '', rent: '', rentStartDate: '' })
+    setAssignModalOpen(true)
+  }
+
+  const handleAssignFormChange = (e) => {
+    const { name, value } = e.target
+    setAssignForm((cur) => ({ ...cur, [name]: value }))
+  }
+
+  const handleAssignRoom = async (e) => {
+    e.preventDefault()
+    if (!assignRoomId) return
+    const token = readAuth().token
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+    try {
+      const body = {
+        tenantId: assignForm.tenantId || undefined,
+        rent: assignForm.rent ? Number(assignForm.rent) : undefined,
+        rentStartDate: assignForm.rentStartDate || undefined,
+      }
+
+      const resp = await fetchWithApiFallback(`/rooms/${assignRoomId}/assign`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify(body),
+      })
+      const data = await resp.json()
+      if (!resp.ok) {
+        window.alert(data?.message || 'Unable to assign room')
+        return
+      }
+
+      // Refresh rooms, tenants, stays and payments
+      const [roomsResp, usersResp, staysResp, paymentsResp] = await Promise.all([
+        fetchWithApiFallback('/rooms', { headers }),
+        fetchWithApiFallback('/users', { headers }),
+        fetchWithApiFallback('/users/stays', { headers }),
+        fetchWithApiFallback('/payments', { headers }),
+      ])
+      if (roomsResp.ok) setRooms((await roomsResp.json()).rooms.map((room) => ({ id: room._id, name: room.number, type: room.type, status: room.status, rent: `₹${Number(room.rent || 0).toLocaleString('en-IN')}` })))
+      if (usersResp.ok) setServerTenants((await usersResp.json()).users || [])
+      if (staysResp.ok) setStayRecords((await staysResp.json()).stays || [])
+      if (paymentsResp.ok) setServerPayments((await paymentsResp.json()).payments || [])
+
+      setAssignModalOpen(false)
+      setAssignRoomId(null)
+      setAssignForm({ tenantId: '', rent: '', rentStartDate: '' })
+      window.alert('Room assigned successfully')
+      // refresh auth user so local auth reflects new room assignment
+      try {
+        await refreshAuthUser()
+      } catch (e) {
+        // ignore
+      }
+    } catch (err) {
+      window.alert('Unable to reach server. Check backend.')
+    }
+  }
+
+  const refreshAuthUser = async () => {
+    try {
+      const auth = readAuth()
+      if (!auth?.token) return
+      const headers = { Authorization: `Bearer ${auth.token}` }
+      const resp = await fetchWithApiFallback('/auth/me', { headers })
+      if (resp.ok) {
+        const d = await resp.json()
+        const next = { user: d.user, role: d.user.role, token: auth.token }
+        localStorage.setItem(AUTH_KEY, JSON.stringify(next))
+        return next
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
 
   const availableRoomChoices = (availableRooms.length ? availableRooms : rooms).filter((room) => {
     const roomStatus = String(room?.status || '').toLowerCase()
@@ -311,7 +448,113 @@ function DashboardPage({ role, user, onLogout }) {
     }
 
     loadDashboardData()
-    return () => { mounted = false }
+    refreshIssues()
+    refreshIssueStats()
+    // start a short payments polling loop to keep dashboards in sync
+    let pollTimer
+    const startPolling = () => {
+      pollTimer = setInterval(async () => {
+        try {
+          const resp = await fetchWithApiFallback('/payments', { headers })
+          if (!mounted || !resp.ok) return
+          const json = await resp.json()
+          const next = json.payments || []
+          // simple detection of change
+          const prev = serverPayments || []
+          const prevIds = (prev || []).map((p) => p._id || p.id).join(',')
+          const nextIds = (next || []).map((p) => p._id || p.id).join(',')
+          if (prevIds !== nextIds) {
+            setServerPayments(next)
+            setToastMessage('Payments updated')
+            setShowToast(true)
+            window.setTimeout(() => setShowToast(false), 3500)
+          }
+          // also poll stays so tenant dashboards reflect recent assignments
+          try {
+            const staysResp = await fetchWithApiFallback('/users/stays', { headers })
+            if (mounted && staysResp.ok) {
+              const staysJson = await staysResp.json()
+              const nextStays = staysJson.stays || []
+              const prevStayIds = (stayRecords || []).map((s) => s.tenantId).join(',')
+              const nextStayIds = (nextStays || []).map((s) => s.tenantId).join(',')
+              if (prevStayIds !== nextStayIds) {
+                setStayRecords(nextStays)
+                setToastMessage('Stays updated')
+                setShowToast(true)
+                window.setTimeout(() => setShowToast(false), 3500)
+              }
+            }
+          } catch (e) {
+            // ignore stays polling errors
+          }
+
+          try {
+            await refreshIssues()
+            if (isAdmin) await refreshIssueStats()
+          } catch (e) {
+            // ignore issue polling errors
+          }
+        } catch (e) {
+          // ignore polling errors
+        }
+      }, 10000)
+    }
+
+    let socket
+    const startSocket = () => {
+      try {
+        socket = ioClient(API_BASES[0] || '/', { transports: ['websocket'] })
+        // identify this socket with the JWT token so the server can place it in the user's room
+        try {
+          const auth = readAuth()
+          if (auth?.token && socket && socket.connected) {
+            socket.emit('identify', auth.token)
+          } else if (auth?.token) {
+            // if not connected yet, emit once connected
+            socket.on('connect', () => socket.emit('identify', auth.token))
+          }
+        } catch (e) {
+          // ignore identify errors
+        }
+        socket.on('connect', () => {
+          // console.log('socket connected', socket.id)
+        })
+        socket.on('room:assigned', (payload) => {
+          // refresh stays and payments when assignment happens
+          if (payload?.tenantId && String(payload.tenantId) === String(userId || '')) {
+            // this is for current logged-in tenant
+            setToastMessage('A room was assigned to you')
+            setShowToast(true)
+            setTimeout(() => setShowToast(false), 3000)
+          }
+          // refresh lists
+          fetchWithApiFallback('/users/stays', { headers }).then((r) => r.ok && r.json().then((d) => setStayRecords(d.stays || []))).catch(() => {})
+          fetchWithApiFallback('/payments', { headers }).then((r) => r.ok && r.json().then((d) => setServerPayments(d.payments || []))).catch(() => {})
+        })
+        socket.on('payment:updated', (payload) => {
+          // update payments list
+          if (payload?.payment) {
+            const p = payload.payment
+            setServerPayments((prev) => {
+              const next = (prev || []).map((item) => (String(item._id || item.id) === String(p._id || p.id) ? p : item))
+              if (!next.find((x) => String(x._id || x.id) === String(p._id || p.id))) next.unshift(p)
+              return next
+            })
+            setToastMessage('Payment updated')
+            setShowToast(true)
+            setTimeout(() => setShowToast(false), 3000)
+          }
+        })
+      } catch (e) {
+        // ignore socket init errors
+      }
+    }
+
+    if (token) {
+      startPolling()
+      startSocket()
+    }
+    return () => { mounted = false; if (pollTimer) clearInterval(pollTimer); if (socket) socket.disconnect() }
   }, [isAdmin])
 
   useEffect(() => {
@@ -329,39 +572,87 @@ function DashboardPage({ role, user, onLogout }) {
   }, [])
 
   const currentMonth = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(today)
+  const parseAmount = (val) => {
+    if (val === null || val === undefined) return 0
+    if (typeof val === 'number') return val
+    const cleaned = String(val).replace(/[^0-9.-]+/g, '')
+    const num = Number(cleaned)
+    return Number.isFinite(num) ? num : 0
+  }
+  const [calendarView, setCalendarView] = useState('month')
+  const [calendarSelectedDate, setCalendarSelectedDate] = useState(new Date())
+  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+  const monthStartWeekday = (startOfMonth.getDay() + 6) % 7
+  const monthDays = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
+  const calendarEventSeed = [
+    { id: 1, title: 'Rent due', type: 'rent', date: new Date(today.getFullYear(), today.getMonth(), 5), time: '10:00 AM' },
+    { id: 2, title: 'Maintenance visit', type: 'maintenance', date: new Date(today.getFullYear(), today.getMonth(), 11), time: '2:30 PM' },
+    { id: 3, title: 'Room inspection', type: 'inspection', date: new Date(today.getFullYear(), today.getMonth(), 18), time: '9:00 AM' },
+    { id: 4, title: 'Community meeting', type: 'event', date: new Date(today.getFullYear(), today.getMonth(), 22), time: '6:00 PM' },
+    { id: 5, title: 'Payment reminder', type: 'payment', date: new Date(today.getFullYear(), today.getMonth(), 27), time: '9:15 AM' },
+  ]
+  const isSameDay = (left, right) => left && right && left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth() && left.getDate() === right.getDate()
+  const getCalendarCells = () => {
+    const cells = []
+    const totalCells = 42
+    const firstDate = new Date(today.getFullYear(), today.getMonth(), 1 - monthStartWeekday)
+    for (let index = 0; index < totalCells; index += 1) {
+      const cellDate = new Date(firstDate)
+      cellDate.setDate(firstDate.getDate() + index)
+      cells.push(cellDate)
+    }
+    return cells
+  }
+  const calendarCells = getCalendarCells()
+  const calendarEvents = calendarEventSeed.map((event) => ({ ...event, date: new Date(event.date) }))
+  const selectedDateEvents = calendarEvents.filter((event) => isSameDay(event.date, calendarSelectedDate))
+  const monthEvents = calendarEvents.filter((event) => event.date.getMonth() === today.getMonth() && event.date.getFullYear() === today.getFullYear())
   const currentTenantPayments = (serverPayments || []).filter((payment) => payment.month === currentMonth)
   const userId = user?.id || user?._id || readAuth().user?.id || readAuth().user?._id || ''
   const tenantCurrentPayments = currentTenantPayments.filter((payment) => {
     const paymentTenantId = typeof payment.tenant === 'object' ? payment.tenant?._id : payment.tenant
     return String(paymentTenantId || '') === String(userId || '')
   })
-  const tenantPaymentSummary = (tenantCurrentPayments.length ? tenantCurrentPayments : [
-    { type: 'Room Rent', amount: 0, status: 'Pending' },
-    { type: 'Electricity Bill', amount: 0, status: 'Pending' },
-    { type: 'Water Bill', amount: 0, status: 'Pending' },
-    { type: 'Security Charge', amount: 0, status: 'Pending' },
-  ]).map((payment) => ({
-    label: payment.type || payment.label || 'Payment',
-    amount: Number(payment.amount || 0),
-    status: payment.status || 'Pending',
-  }))
-  const tenantTotalDue = tenantPaymentSummary
-    .filter((item) => item.status === 'Pending')
-    .reduce((sum, item) => sum + Number(item.amount || 0), 0)
+  const paymentOrder = ['Security Charge', 'Water Bill', 'Electricity Bill', 'Room Rent']
+  const tenantPaymentSummary = [...tenantCurrentPayments]
+    .map((payment) => ({
+      label: payment.type || payment.label || 'Payment',
+      amount: parseAmount(payment.amount || 0),
+      status: payment.status || 'Pending',
+    }))
+    .sort((a, b) => {
+      const aIndex = paymentOrder.indexOf(a.label)
+      const bIndex = paymentOrder.indexOf(b.label)
+      if (aIndex === -1 && bIndex === -1) return 0
+      if (aIndex === -1) return 1
+      if (bIndex === -1) return -1
+      return aIndex - bIndex
+    })
+  const tenantTotalDue = tenantPaymentSummary.reduce((sum, item) => sum + Number(item.amount || 0), 0)
   const hasPendingTenantPayment = tenantPaymentSummary.some((item) => item.status === 'Pending')
 
-  const [complaints, setComplaints] = useState([
-    { id: 1, title: 'Water leakage', owner: 'Aisha Khan', status: 'Open', priority: 'High' },
-    { id: 2, title: 'Fan repair', owner: 'Rohit Verma', status: 'In review', priority: 'Medium' },
-    { id: 3, title: 'Wi-Fi issue', owner: 'Neha Patel', status: 'Resolved', priority: 'Low' },
-  ])
-
+  const [complaints, setComplaints] = useState([])
   const [complaintForm, setComplaintForm] = useState({
     title: '',
     category: 'Maintenance',
+    priority: 'High',
+    roomNumber: '',
     description: '',
+    attachment: '',
   })
   const [showComplaintForm, setShowComplaintForm] = useState(false)
+  const [selectedIssueId, setSelectedIssueId] = useState(null)
+  const [selectedIssueDetail, setSelectedIssueDetail] = useState(null)
+  const [issueMessages, setIssueMessages] = useState([])
+  const [issueReplyText, setIssueReplyText] = useState('')
+  const [issueSummary, setIssueSummary] = useState({ total: 0, open: 0, inReview: 0, inProgress: 0, resolved: 0 })
+
+  useEffect(() => {
+    if (!selectedIssueDetail) return
+    const issueId = selectedIssueDetail._id || selectedIssueDetail.id
+    if (!issueId) return
+    loadIssueThread({ ...selectedIssueDetail, _id: issueId })
+  }, [selectedIssueDetail])
 
   const [messages, setMessages] = useState([
     { id: 1, from: 'Owner', preview: 'The room inspection is scheduled for Friday.', unread: 2, time: '10:24 AM', subject: 'Inspection update' },
@@ -376,12 +667,12 @@ function DashboardPage({ role, user, onLogout }) {
         { label: 'Total rooms', value: '128', trend: '+8% this month' },
         { label: 'Occupancy', value: '92%', trend: 'Healthy demand' },
         { label: 'Collections', value: '₹4.8L', trend: '+12% vs last month' },
-        { label: 'Complaints', value: '14', trend: '7 open issues' },
+        { label: 'Complaints', value: String(issueSummary.total || 0), trend: `${issueSummary.open || 0} open issues` },
       ]
     : [
         { label: 'My room', value: 'Room 102', trend: 'Ready to move in' },
         { label: 'Rent due', value: '₹3,000', trend: 'Due in 6 days' },
-        { label: 'Requests', value: '3', trend: '1 pending review' },
+        { label: 'Requests', value: String(complaints.filter((item) => item.status !== 'Resolved').length || 0), trend: 'Issue requests' },
         { label: 'Profile', value: 'Verified', trend: 'Lease active' },
       ]
 
@@ -431,17 +722,48 @@ function DashboardPage({ role, user, onLogout }) {
       })
       const data = await response.json()
       if (!response.ok) {
-        window.alert(data?.message || 'Unable to complete payment')
+        // show sad animation for failed payment
+        setToastMessage(data?.message || 'Unable to complete payment')
+        setShowToast(true)
+        setShowSad(true)
+        setTimeout(() => setShowSad(false), 2500)
+        setTimeout(() => setShowToast(false), 3500)
         return
       }
 
+      // update local payments list
       setServerPayments((prev) => (prev || []).map((entry) => (
         entry._id === payment._id ? { ...entry, ...data.payment, status: 'Paid' } : entry
       )))
+      // show celebration animation and highlight the paid row
+      setAnimatedPaymentId(payment._id)
+      setShowCelebration(true)
+      setToastMessage(`Payment received: ₹${Number(payment.amount || data.payment?.amount || 0).toLocaleString('en-IN')}`)
+      setShowToast(true)
+      window.setTimeout(() => {
+        setShowToast(false)
+      }, 3500)
+      window.setTimeout(() => {
+        setShowCelebration(false)
+        setAnimatedPaymentId(null)
+      }, 3000)
+      // also fetch latest payments for admin/tenant views
+      try {
+        const token = readAuth().token
+        const headers = { Authorization: `Bearer ${token}` }
+        const resp = await fetchWithApiFallback('/payments', { headers })
+        if (resp.ok) setServerPayments((await resp.json()).payments || [])
+      } catch (e) {
+        // ignore
+      }
       window.alert('Payment completed successfully.')
     } catch {
       const nextUpi = upiDetails.adminUpiId || '7087338600@ybl'
-      window.alert(`Unable to reach the server. Pay to: ${nextUpi}`)
+      setToastMessage(`Network error — pay to: ${nextUpi}`)
+      setShowToast(true)
+      setShowSad(true)
+      setTimeout(() => setShowSad(false), 2500)
+      setTimeout(() => setShowToast(false), 3500)
     }
   }
 
@@ -548,45 +870,206 @@ function DashboardPage({ role, user, onLogout }) {
     }
   }
 
+  const refreshIssues = async () => {
+    const token = readAuth().token
+    if (!token) return
+
+    try {
+      const response = await fetchWithApiFallback(isAdmin ? '/complaints' : '/complaints/my', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        setComplaints([])
+        return
+      }
+      const normalized = (data.complaints || []).map((item) => ({
+        _id: item._id,
+        id: item.issueId || item._id,
+        issueId: item.issueId || item._id,
+        title: item.title,
+        owner: item.tenant?.name || 'Tenant',
+        tenant: item.tenant,
+        room: item.room?.number || item.roomNumber || 'N/A',
+        priority: item.priority || 'Medium',
+        status: item.status || 'Open',
+        category: item.category || 'Maintenance',
+        description: item.description || '',
+        createdAt: item.createdAt,
+        resolvedAt: item.resolvedAt,
+        adminResponse: item.adminResponse || '',
+      }))
+      setComplaints(normalized)
+      if (selectedIssueId) {
+        const selected = normalized.find((item) => item._id === selectedIssueId || item.id === selectedIssueId)
+        if (selected) setSelectedIssueDetail(selected)
+      }
+    } catch {
+      setComplaints([])
+    }
+  }
+
+  const refreshIssueStats = async () => {
+    if (!isAdmin) return
+    const token = readAuth().token
+    if (!token) return
+
+    try {
+      const response = await fetchWithApiFallback('/complaints/stats', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await response.json()
+      if (response.ok) setIssueSummary(data.stats || { total: 0, open: 0, inReview: 0, inProgress: 0, resolved: 0 })
+    } catch {
+      // ignore stats fetch failures
+    }
+  }
+
+  const loadIssueThread = async (issue) => {
+    const token = readAuth().token
+    if (!token || !issue) return
+    try {
+      const response = await fetchWithApiFallback(`/complaints/${issue._id}/messages`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await response.json()
+      if (response.ok) {
+        setIssueMessages(data.messages || [])
+      }
+    } catch {
+      setIssueMessages([])
+    }
+  }
+
   const handleComplaintFieldChange = (event) => {
     const { name, value } = event.target
     setComplaintForm((prev) => ({ ...prev, [name]: value }))
   }
 
-  const handleCreateComplaint = () => {
+  const handleCreateComplaint = async () => {
     const title = complaintForm.title.trim()
     if (!title) {
       window.alert('Please enter a complaint title.')
       return
     }
-
-    const newComplaint = {
-      id: Date.now(),
-      title,
-      owner: user?.name || 'Tenant',
-      status: 'Open',
-      priority: complaintForm.category,
+    if (!complaintForm.description.trim()) {
+      window.alert('Please enter a complaint description.')
+      return
     }
 
-    setComplaints((prev) => [newComplaint, ...prev])
-    setComplaintForm({ title: '', category: 'Maintenance', description: '' })
-    setShowComplaintForm(false)
-    setActiveSection('Complaints')
-    window.alert('Complaint submitted successfully.')
-  }
-
-  const resolveComplaint = (id) => {
-    setComplaints((prev) => prev.map((item) => (item.id === id ? { ...item, status: 'Resolved' } : item)))
-  }
-
-  const toggleRoomStatus = (id) => {
-    setRooms((prev) => prev.map((room) => {
-      if (room.id !== id) return room
-      return {
-        ...room,
-        status: room.status === 'Available' ? 'Occupied' : 'Available',
+    const token = readAuth().token
+    try {
+      const response = await fetchWithApiFallback('/complaints', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title,
+          category: complaintForm.category,
+          priority: complaintForm.priority,
+          roomNumber: complaintForm.roomNumber,
+          description: complaintForm.description,
+          attachment: complaintForm.attachment,
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        window.alert(data?.message || 'Unable to submit complaint')
+        return
       }
-    }))
+      setComplaintForm({ title: '', category: 'Maintenance', priority: 'High', roomNumber: '', description: '', attachment: '' })
+      setShowComplaintForm(false)
+      setActiveSection('Complaints')
+      await refreshIssues()
+      if (isAdmin) await refreshIssueStats()
+      window.alert('Complaint submitted successfully.')
+    } catch {
+      window.alert('Unable to reach the server. Please check the backend connection.')
+    }
+  }
+
+  const resolveComplaint = async (issueOrId) => {
+    const issue = typeof issueOrId === 'object' ? issueOrId : complaints.find((item) => String(item._id || item.id) === String(issueOrId))
+    if (!issue) return
+
+    const issueId = issue._id || issue.id
+    const token = readAuth().token
+    const resolution = window.prompt('Resolution message (optional):', issue.adminResponse || 'Issue resolved.') || issue.adminResponse || 'Issue resolved.'
+    try {
+      const response = await fetchWithApiFallback(`/complaints/${issueId}/resolve`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ adminResponse: resolution }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        window.alert(data?.message || 'Unable to resolve issue')
+        return
+      }
+      await refreshIssues()
+      if (isAdmin) await refreshIssueStats()
+      setSelectedIssueDetail((prev) => ({ ...prev, status: 'Resolved', adminResponse: resolution }))
+      await loadIssueThread({ ...issue, _id: issueId })
+    } catch {
+      window.alert('Unable to update issue status.')
+    }
+  }
+
+  const handleIssueReply = async () => {
+    if (!selectedIssueDetail || !issueReplyText.trim()) return
+    const issueId = selectedIssueDetail._id || selectedIssueDetail.id
+    const token = readAuth().token
+    try {
+      const response = await fetchWithApiFallback(`/complaints/${issueId}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ message: issueReplyText.trim() }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        window.alert(data?.message || 'Unable to send reply')
+        return
+      }
+      setIssueReplyText('')
+      await loadIssueThread(selectedIssueDetail)
+    } catch {
+      window.alert('Unable to send a message right now.')
+    }
+  }
+
+  const toggleRoomStatus = async (id) => {
+    const token = readAuth().token
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+    const current = rooms.find((r) => r.id === id)
+    if (!current) return
+    const nextStatus = current.status === 'Available' ? 'Occupied' : 'Available'
+
+    try {
+      const resp = await fetchWithApiFallback(`/rooms/${id}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ status: nextStatus }),
+      })
+      const data = await resp.json()
+      if (!resp.ok) {
+        window.alert(data?.message || 'Unable to update room status')
+        return
+      }
+
+      // Update UI from server response
+      const updated = data.room || { _id: id, status: nextStatus }
+      setRooms((prev) => prev.map((room) => (room.id === id ? { ...room, status: updated.status } : room)))
+    } catch (e) {
+      window.alert('Unable to reach server. Please check connection.')
+    }
   }
 
   const activeMessage = messages.find((message) => message.id === selectedMessageId) || messages[0]
@@ -811,8 +1294,53 @@ function DashboardPage({ role, user, onLogout }) {
               <h3>Room availability</h3>
               <p>Live property overview</p>
             </div>
-            <button type="button" className="action-button primary">Add room</button>
+            <div style={{display: 'flex', gap: 10, alignItems: 'center'}}>
+              <button type="button" className="action-button primary" onClick={() => setShowAddRoomForm((s) => !s)}>
+                {showAddRoomForm ? 'Cancel' : 'Add room'}
+              </button>
+            </div>
           </div>
+
+          {showAddRoomForm && (
+            <div className="content-card" style={{marginTop: 10}}>
+              <form className="tenant-form" onSubmit={handleAddRoom}>
+                <div className="tenant-form-grid">
+                  <label className="tenant-field">
+                    <span className="field-label">Room number</span>
+                    <input name="number" value={roomForm.number} onChange={handleRoomFormChange} placeholder="e.g. 305" required />
+                  </label>
+
+                  <label className="tenant-field">
+                    <span className="field-label">Type</span>
+                    <select name="type" value={roomForm.type} onChange={handleRoomFormChange}>
+                      <option>Private room</option>
+                      <option>Shared room</option>
+                      <option>1BHK</option>
+                      <option>2BHK</option>
+                    </select>
+                  </label>
+
+                  <label className="tenant-field">
+                    <span className="field-label">Monthly rent (₹)</span>
+                    <input name="rent" value={roomForm.rent} onChange={handleRoomFormChange} type="number" placeholder="3000" />
+                  </label>
+
+                  <label className="tenant-field">
+                    <span className="field-label">Status</span>
+                    <select name="status" value={roomForm.status} onChange={handleRoomFormChange}>
+                      <option>Available</option>
+                      <option>Occupied</option>
+                      <option>Maintenance</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="tenant-form-actions">
+                  <button type="submit" className="action-button primary">Create room</button>
+                </div>
+              </form>
+            </div>
+          )}
 
           <div className="data-table">
             <div className="table-head">
@@ -828,10 +1356,56 @@ function DashboardPage({ role, user, onLogout }) {
                 <span>{room.type}</span>
                 <span>{room.rent}</span>
                 <span><em className={`status-badge ${room.status === 'Available' ? 'success' : 'neutral'}`}>{room.status}</em></span>
-                <span><button type="button" className="action-button small" onClick={() => toggleRoomStatus(room.id)}>{room.status === 'Available' ? 'Mark occupied' : 'Mark available'}</button></span>
+                <span style={{display: 'flex', gap: 8, alignItems: 'center'}}>
+                  <button type="button" className="action-button small" onClick={() => toggleRoomStatus(room.id)}>{room.status === 'Available' ? 'Mark occupied' : 'Mark available'}</button>
+                  <button type="button" className="action-button small" onClick={() => openAssignModal(room)}>Assign</button>
+                </span>
               </div>
             ))}
           </div>
+          {/* Assign room modal */}
+          {assignModalOpen && (
+            <div className="modal-overlay" style={{position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60}}>
+              <div className="modal-card" style={{background: '#fff', borderRadius: 8, padding: 18, width: 520, maxWidth: '95%'}}>
+                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8}}>
+                  <div>
+                    <h3 style={{margin: 0}}>Assign room</h3>
+                    <small>Choose a tenant and start the rent</small>
+                  </div>
+                  <button type="button" className="mini-link-button" onClick={() => setAssignModalOpen(false)}>Close</button>
+                </div>
+
+                <form onSubmit={handleAssignRoom}>
+                  <div style={{display: 'grid', gap: 10}}>
+                    <label>
+                      Tenant
+                      <select name="tenantId" value={assignForm.tenantId} onChange={handleAssignFormChange} required>
+                        <option value="">Select tenant</option>
+                        {(serverTenants || []).map((t) => (
+                          <option key={t._id || t.id} value={t._id || t.id}>{t.name || (t.fullName || t.email)}</option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label>
+                      Rent (₹)
+                      <input name="rent" type="number" value={assignForm.rent} onChange={handleAssignFormChange} placeholder="Monthly rent" />
+                    </label>
+
+                    <label>
+                      Rent start date
+                      <input name="rentStartDate" type="date" value={assignForm.rentStartDate} onChange={handleAssignFormChange} />
+                    </label>
+
+                    <div style={{display: 'flex', justifyContent: 'flex-end', gap: 8}}>
+                      <button type="button" className="action-button" onClick={() => setAssignModalOpen(false)}>Cancel</button>
+                      <button type="submit" className="action-button primary">Assign room</button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       )
     }
@@ -959,7 +1533,10 @@ function DashboardPage({ role, user, onLogout }) {
                 <span>{tenant.name}</span>
                 <span>{tenant.room?.number || tenant.room || 'Unassigned'}</span>
                 <span>{tenant.rentStartDate ? `${calculateStayDays(tenant.rentStartDate, today)} days` : (tenant.lease || 'Not started')}</span>
-                <span><em className={`status-badge ${tenant.isActive === false || tenant.status === 'Pending' ? 'warning' : 'success'}`}>{tenant.isActive === false ? 'Inactive' : (tenant.status || 'Active')}</em></span>
+                <span style={{display: 'flex', gap: 8, alignItems: 'center'}}>
+                  <em className={`status-badge ${tenant.isActive === false || tenant.status === 'Pending' ? 'warning' : 'success'}`}>{tenant.isActive === false ? 'Inactive' : (tenant.status || 'Active')}</em>
+                  {isAdmin && <button type="button" className="action-button small" onClick={() => openAssignToTenant(tenant)}>Assign</button>}
+                </span>
               </div>
             ))}
           </div>
@@ -974,6 +1551,40 @@ function DashboardPage({ role, user, onLogout }) {
             <div>
               <h3>Payments</h3>
               <p>Current dues and receipts</p>
+            </div>
+            <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
+              {isAdmin && (
+                <>
+                  <select value={demoTenantId} onChange={(e) => setDemoTenantId(e.target.value)}>
+                    <option value="">Select tenant (demo)</option>
+                    {(serverTenants || []).map((t) => (
+                      <option key={t._id || t.id} value={t._id || t.id}>{t.name || t.email}</option>
+                    ))}
+                  </select>
+                  <button type="button" className="action-button" onClick={async () => {
+                    if (!demoTenantId) { window.alert('Choose a tenant first'); return }
+                    try {
+                      const token = readAuth().token
+                      const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+                      const demo = [
+                        { type: 'Room Rent', amount: 3000, month: currentMonth, dueDate: new Date(), status: 'Pending' },
+                        { type: 'Electricity Bill', amount: 250, month: currentMonth, dueDate: new Date(), status: 'Pending' },
+                        { type: 'Water Bill', amount: 120, month: currentMonth, dueDate: new Date(), status: 'Paid' },
+                      ]
+                      for (const p of demo) {
+                        await fetchWithApiFallback('/payments', { method: 'POST', headers, body: JSON.stringify({ tenantId: demoTenantId, ...p }) })
+                      }
+                      const resp = await fetchWithApiFallback('/payments', { headers })
+                      if (resp.ok) setServerPayments((await resp.json()).payments || [])
+                      setToastMessage('Demo payments added')
+                      setShowToast(true)
+                      setTimeout(() => setShowToast(false), 3000)
+                    } catch (err) {
+                      // ignore
+                    }
+                  }}>Add demo payments</button>
+                </>
+              )}
             </div>
           </div>
 
@@ -996,11 +1607,14 @@ function DashboardPage({ role, user, onLogout }) {
                   <button type="button" className="action-button primary pay-row-button" onClick={handleTenantPaymentRowPay}>
                     <span className="pay-icon" aria-hidden>
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-                        <rect x="1.5" y="5" width="21" height="14" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none" />
-                        <rect x="17" y="9" width="3" height="3" rx="0.6" fill="currentColor" />
+                        <rect x="2" y="6" width="20" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none" />
+                        <path d="M6 9h6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                        <path d="M6 12h6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                        <path d="M17 9v4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                        <circle cx="18.5" cy="11" r="1" fill="currentColor" />
                       </svg>
                     </span>
-                    <span className="pay-label">Pay Now</span>
+                    <span className="pay-label">Pay Rent</span>
                   </button>
                 ) : (
                   <span className="status-badge success pay-row-badge">Paid</span>
@@ -1017,32 +1631,63 @@ function DashboardPage({ role, user, onLogout }) {
               <span>Action</span>
             </div>
             {(serverPayments && serverPayments.length ? serverPayments.filter((payment) => payment.month === currentMonth && String(typeof payment.tenant === 'object' ? payment.tenant?._id : payment.tenant || '') === String(userId || '')) : payments).map((payment) => {
+              const rawAmount = payment.amount || 0
+              const amountNum = parseAmount(rawAmount)
               const normalized = {
                 id: payment._id || payment.id,
                 type: payment.type || payment.name || 'Payment',
-                amount: `₹${Number(payment.amount || 0).toLocaleString('en-IN')}`,
+                amount: `₹${Number(amountNum).toLocaleString('en-IN')}`,
                 status: payment.status || payment.due || 'Pending',
               }
               return (
-                <div className="table-row" key={normalized.id}>
-                  <span>{normalized.type}</span>
-                  <span>{normalized.amount}</span>
-                  <span><em className={`status-badge ${normalized.status === 'Paid' ? 'success' : 'warning'}`}>{normalized.status}</em></span>
-                  <span>
-                    {normalized.status === 'Pending' ? (
-                      <button type="button" className="action-button small" onClick={() => handleTenantPayNow(payment)}>
-                        <span className="pay-icon" aria-hidden>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
-                            <rect x="1.5" y="5" width="21" height="14" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none" />
-                            <rect x="17" y="9" width="3" height="3" rx="0.6" fill="currentColor" />
-                          </svg>
-                        </span>
-                        <span className="pay-label">Pay Now</span>
-                      </button>
-                    ) : (
-                      <span className="muted-label">Completed</span>
-                    )}
-                  </span>
+                <div key={normalized.id}>
+                  <div className={`table-row ${animatedPaymentId === payment._id ? 'paid-animate' : ''}`} onClick={() => setExpandedPaymentId(expandedPaymentId === payment._id ? null : payment._id)}>
+                    <span>{normalized.type}</span>
+                    <span>{normalized.amount}</span>
+                    <span><em className={`status-badge ${normalized.status === 'Paid' ? 'success' : 'warning'}`}>{normalized.status}</em></span>
+                    <span>
+                      {normalized.status === 'Pending' ? (
+                        <button type="button" className="action-button small" onClick={(e) => { e.stopPropagation(); handleTenantPayNow(payment) }}>
+                          <span className="pay-icon" aria-hidden>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                              <rect x="2" y="6" width="20" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none" />
+                              <path d="M6 9h5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                              <path d="M6 12h5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                              <circle cx="17.5" cy="10.8" r="0.9" fill="currentColor" />
+                            </svg>
+                          </span>
+                          <span className="pay-label">Pay</span>
+                        </button>
+                      ) : (
+                        <span className="muted-label">Completed</span>
+                      )}
+                    </span>
+                  </div>
+
+                  {expandedPaymentId === payment._id && (
+                    <div className="payment-expanded" style={{padding: 14, border: '1px solid #eef2f7', borderRadius: 10, margin: '8px 0 12px', display: 'flex', gap: 12, alignItems: 'center'}}>
+                      <div style={{width: 80, height: 80, borderRadius: 8, background: '#fff', border: '1px solid #e6eefc', display: 'grid', placeItems: 'center'}} className="payment-expanded">
+                        <img
+                          src="/icons/payment-placeholder.png"
+                          alt="receipt"
+                          className={(expandedPaymentId === payment._id || animatedPaymentId === payment._id) ? 'pop-animate' : ''}
+                          style={{width: 56, height: 56, objectFit: 'cover'}}
+                          onError={(e) => { e.target.style.display = 'none' }}
+                        />
+                      </div>
+                      <div style={{flex: 1}}>
+                        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                          <strong>{normalized.type}</strong>
+                          <small style={{color:'#7b8aa3'}}>{normalized.status}</small>
+                        </div>
+                        <div style={{marginTop:8}}>
+                          <div>Amount: <b>{normalized.amount}</b></div>
+                          <div>Month: <b>{payment.month || currentMonth}</b></div>
+                          <div>Due date: <b>{payment.dueDate ? new Date(payment.dueDate).toLocaleDateString() : '—'}</b></div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -1119,7 +1764,15 @@ function DashboardPage({ role, user, onLogout }) {
               <h3>Complaints</h3>
               <p>{isAdmin ? 'Support queue' : 'Your reported issues'}</p>
             </div>
-            <button type="button" className="action-button primary" onClick={() => setShowComplaintForm((prev) => !prev)}>New complaint</button>
+            <button type="button" className="action-button primary" onClick={() => setShowComplaintForm((prev) => !prev)}>
+              <span className="header-btn-icon" aria-hidden>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M3 7h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M7 7V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </span>
+              <span className="header-btn-label">New complaint</span>
+            </button>
           </div>
 
           {showComplaintForm && (
@@ -1168,7 +1821,7 @@ function DashboardPage({ role, user, onLogout }) {
 
           <div className="task-list">
             {complaints.map((complaint) => (
-              <div className="task-item" key={complaint.id}>
+              <div className="task-item" key={complaint.id} onClick={() => setSelectedIssueDetail(complaint)} style={{ cursor: 'pointer' }}>
                 <div>
                   <h4>{complaint.title}</h4>
                   <p>{complaint.owner}</p>
@@ -1177,11 +1830,231 @@ function DashboardPage({ role, user, onLogout }) {
                   <span className="mini-tag">{complaint.priority}</span>
                   <span className={`status-badge ${complaint.status === 'Resolved' ? 'success' : complaint.status === 'Open' ? 'warning' : 'neutral'}`}>{complaint.status}</span>
                   {complaint.status !== 'Resolved' && (
-                    <button type="button" className="action-button small" onClick={() => resolveComplaint(complaint.id)}>Resolve</button>
+                    <button type="button" className="action-button small" onClick={(event) => { event.stopPropagation(); resolveComplaint(complaint) }}>Resolve</button>
                   )}
                 </div>
               </div>
             ))}
+          </div>
+
+          {selectedIssueDetail && (
+            <div className="complaint-thread-panel">
+              <div className="message-thread-header">
+                <div>
+                  <span className="message-thread-label">Issue thread</span>
+                  <h4>{selectedIssueDetail.title}</h4>
+                </div>
+                <div className="task-meta">
+                  <span className="mini-tag">{selectedIssueDetail.issueId || selectedIssueDetail.id}</span>
+                  <span className={`status-badge ${selectedIssueDetail.status === 'Resolved' ? 'success' : selectedIssueDetail.status === 'Open' ? 'warning' : 'neutral'}`}>{selectedIssueDetail.status}</span>
+                </div>
+              </div>
+
+              <div className="complaint-thread-meta">
+                <span>Category: {selectedIssueDetail.category}</span>
+                <span>Priority: {selectedIssueDetail.priority}</span>
+                <span>Room: {selectedIssueDetail.room || 'N/A'}</span>
+              </div>
+
+              <div className="complaint-thread-description">
+                <p>{selectedIssueDetail.description || 'No description provided.'}</p>
+                {selectedIssueDetail.adminResponse && (
+                  <div className="complaint-admin-response">
+                    <strong>Admin response:</strong>
+                    <p>{selectedIssueDetail.adminResponse}</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="message-thread-body">
+                {(issueMessages || []).map((message) => (
+                  <div key={message._id || message.messageId} className={`thread-message ${message.sender?._id === userId ? 'mine' : ''}`}>
+                    <span>{message.sender?.name || 'System'}:</span>
+                    <p>{message.body}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="complaint-reply-box">
+                <textarea
+                  value={issueReplyText}
+                  onChange={(event) => setIssueReplyText(event.target.value)}
+                  placeholder="Write a reply to the issue thread..."
+                />
+                <div className="complaint-form-actions">
+                  {isAdmin && selectedIssueDetail.status !== 'Resolved' && (
+                    <button type="button" className="action-button small" onClick={() => resolveComplaint(selectedIssueDetail)}>Resolve issue</button>
+                  )}
+                  <button type="button" className="action-button primary" onClick={handleIssueReply}>Send reply</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    if (activeSection === 'Calendar') {
+      const activeCalendarDate = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }).format(calendarSelectedDate)
+      const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+      const visibleWeek = (() => {
+        const start = new Date(calendarSelectedDate)
+        const day = (start.getDay() + 6) % 7
+        start.setDate(start.getDate() - day)
+        return Array.from({ length: 7 }, (_, index) => {
+          const date = new Date(start)
+          date.setDate(start.getDate() + index)
+          return date
+        })
+      })()
+
+      return (
+        <div className="content-card calendar-card">
+          <div className="content-header">
+            <div>
+              <h3>Calendar</h3>
+              <p>Upcoming room and maintenance schedule</p>
+            </div>
+            <div className="calendar-toolbar">
+              <div className="calendar-toggle" aria-label="Calendar view toggle">
+                {['month', 'week', 'agenda'].map((view) => (
+                  <button
+                    key={view}
+                    type="button"
+                    className={calendarView === view ? 'active' : ''}
+                    onClick={() => setCalendarView(view)}
+                  >
+                    {view.charAt(0).toUpperCase() + view.slice(1)}
+                  </button>
+                ))}
+              </div>
+              <button type="button" className="action-button primary small" onClick={() => {
+                const todayDate = new Date()
+                setCalendarSelectedDate(todayDate)
+                setCalendarView('month')
+              }}>
+                Today
+              </button>
+            </div>
+          </div>
+
+          <div className="calendar-layout">
+            <div className="calendar-panel">
+              <div className="calendar-header-row">
+                <button type="button" className="calendar-nav-button" onClick={() => {
+                  const next = new Date(calendarSelectedDate)
+                  next.setMonth(next.getMonth() - 1)
+                  setCalendarSelectedDate(next)
+                }}>←</button>
+                <strong>{new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric' }).format(calendarSelectedDate)}</strong>
+                <button type="button" className="calendar-nav-button" onClick={() => {
+                  const next = new Date(calendarSelectedDate)
+                  next.setMonth(next.getMonth() + 1)
+                  setCalendarSelectedDate(next)
+                }}>→</button>
+              </div>
+
+              {calendarView === 'month' && (
+                <>
+                  <div className="calendar-weekdays">
+                    {weekDays.map((day) => <span key={day}>{day}</span>)}
+                  </div>
+                  <div className="calendar-grid">
+                    {calendarCells.map((date, index) => {
+                      const eventsForDay = calendarEvents.filter((event) => isSameDay(event.date, date))
+                      const isCurrentMonth = date.getMonth() === calendarSelectedDate.getMonth()
+                      const isToday = isSameDay(date, new Date())
+                      const isSelected = isSameDay(date, calendarSelectedDate)
+
+                      return (
+                        <button
+                          key={`${date.toISOString()}-${index}`}
+                          type="button"
+                          className={`calendar-day ${isCurrentMonth ? '' : 'muted'} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''}`}
+                          onClick={() => setCalendarSelectedDate(date)}
+                        >
+                          <span className="calendar-day-number">{date.getDate()}</span>
+                          <div className="calendar-day-events">
+                            {eventsForDay.slice(0, 2).map((event) => (
+                              <span key={event.id} className={`calendar-event-dot ${event.type}`} title={event.title} />
+                            ))}
+                            {eventsForDay.length > 2 && <span className="calendar-more">+{eventsForDay.length - 2}</span>}
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+
+              {calendarView === 'week' && (
+                <div className="calendar-week-view">
+                  {visibleWeek.map((date) => {
+                    const eventsForDay = calendarEvents.filter((event) => isSameDay(event.date, date))
+                    const isToday = isSameDay(date, new Date())
+                    const isSelected = isSameDay(date, calendarSelectedDate)
+                    return (
+                      <button
+                        key={date.toISOString()}
+                        type="button"
+                        className={`calendar-week-day ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''}`}
+                        onClick={() => setCalendarSelectedDate(date)}
+                      >
+                        <span className="calendar-week-title">{new Intl.DateTimeFormat('en-IN', { weekday: 'short' }).format(date)}</span>
+                        <strong>{date.getDate()}</strong>
+                        <div className="calendar-week-events">
+                          {eventsForDay.slice(0, 2).map((event) => (
+                            <span key={event.id} className={`calendar-event-dot ${event.type}`} title={event.title} />
+                          ))}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
+              {calendarView === 'agenda' && (
+                <div className="calendar-agenda-list">
+                  {monthEvents.length ? monthEvents.map((event) => (
+                    <div key={event.id} className={`calendar-agenda-item ${event.type}`}>
+                      <span className={`calendar-event-dot ${event.type}`} />
+                      <div>
+                        <strong>{event.title}</strong>
+                        <small>{new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' }).format(event.date)} · {event.time}</small>
+                      </div>
+                    </div>
+                  )) : <p className="empty-state-light">No events scheduled this month.</p>}
+                </div>
+              )}
+            </div>
+
+            <aside className="calendar-side-panel">
+              <div className="calendar-side-header">
+                <div>
+                  <span className="calendar-side-label">Selected date</span>
+                  <h4>{activeCalendarDate}</h4>
+                </div>
+              </div>
+
+              <div className="calendar-event-list">
+                {selectedDateEvents.length ? selectedDateEvents.map((event) => (
+                  <div key={event.id} className="calendar-event-item">
+                    <span className={`calendar-event-dot ${event.type}`} />
+                    <div>
+                      <strong>{event.title}</strong>
+                      <small>{event.time}</small>
+                    </div>
+                  </div>
+                )) : <p className="empty-state-light">No events scheduled.</p>}
+              </div>
+
+              <div className="calendar-legend">
+                <span><i className="calendar-event-dot rent" /> Rent</span>
+                <span><i className="calendar-event-dot maintenance" /> Maintenance</span>
+                <span><i className="calendar-event-dot inspection" /> Inspection</span>
+                <span><i className="calendar-event-dot event" /> Event</span>
+              </div>
+            </aside>
           </div>
         </div>
       )
@@ -1203,7 +2076,13 @@ function DashboardPage({ role, user, onLogout }) {
                 setShowComplaintForm(true)
               }}
             >
-              New complaint
+              <span className="header-btn-icon" aria-hidden>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M3 7h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M7 7V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </span>
+              <span className="header-btn-label">New complaint</span>
             </button>
           </div>
 
@@ -1230,6 +2109,18 @@ function DashboardPage({ role, user, onLogout }) {
             </div>
 
             <div className="message-thread">
+              {/* Toast and celebration overlays */}
+              {showToast && <div className="app-toast">{toastMessage}</div>}
+              {showCelebration && (
+                <div className="celebration">
+                  <img src="/icons/success.svg" alt="success" style={{width:160,height:160}} />
+                </div>
+              )}
+              {showSad && (
+                <div className="sad-overlay">
+                  <img src="/icons/failure.svg" alt="failure" style={{width:160,height:160}} />
+                </div>
+              )}
               <div className="message-thread-header">
                 <div>
                   <span className="message-thread-label">Conversation</span>
@@ -1308,7 +2199,7 @@ function DashboardPage({ role, user, onLogout }) {
                   setSidebarOpen(false)
                 }}
               >
-                <span>{item === 'Overview' ? '▦' : item === 'Rooms' || item === 'My room' ? '⌂' : item === 'Payments' || item === 'Rent & payments' ? '₹' : item === 'Messages' ? '▢' : item === 'Complaints' ? '▤' : '♙'}</span>
+                <span>{item === 'Overview' ? '▦' : item === 'Rooms' || item === 'My room' ? '⌂' : item === 'Payments' || item === 'Rent & payments' ? '₹' : item === 'Messages' ? '▢' : item === 'Complaints' ? '▤' : item === 'Calendar' ? '◫' : '♙'}</span>
                 <span className="nav-text">{getNavLabel(item)}</span>
               </button>
             ))}

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 const portfolioNav = [
   { label: 'Home', href: '#home' },
@@ -107,6 +107,47 @@ const education = [
     detail: 'Completed',
   },
 ]
+
+const rotatingHeroPhrases = ['Software Developer', 'Frontend Engineer', 'Full Stack Engineer']
+
+function TypewriterText({ phrases }) {
+  const [displayText, setDisplayText] = useState('')
+  const [phraseIndex, setPhraseIndex] = useState(0)
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  useEffect(() => {
+    const currentPhrase = phrases[phraseIndex]
+    const typeDelay = isDeleting ? 45 : 90
+
+    const timeout = window.setTimeout(() => {
+      if (!isDeleting) {
+        const nextText = currentPhrase.slice(0, displayText.length + 1)
+        setDisplayText(nextText)
+
+        if (nextText === currentPhrase) {
+          window.setTimeout(() => setIsDeleting(true), 1400)
+        }
+      } else {
+        const nextText = currentPhrase.slice(0, displayText.length - 1)
+        setDisplayText(nextText)
+
+        if (nextText === '') {
+          setIsDeleting(false)
+          setPhraseIndex((prev) => (prev + 1) % phrases.length)
+        }
+      }
+    }, typeDelay)
+
+    return () => window.clearTimeout(timeout)
+  }, [displayText, isDeleting, phraseIndex, phrases])
+
+  return (
+    <span className="portfolio-typewriter-wrap">
+      <span className="portfolio-typewriter-text">{displayText}</span>
+      <span className="portfolio-typewriter-cursor" aria-hidden="true" />
+    </span>
+  )
+}
 
 export default function PortfolioPage() {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -370,7 +411,7 @@ export default function PortfolioPage() {
                 }}>
                   I'm Manish Kumar
                 </h1>
-                <div style={{
+                <div className="portfolio-typewriter-shell" style={{
                   fontSize: 'clamp(1.5rem, 4vw, 2rem)',
                   fontWeight: '700',
                   letterSpacing: '-0.01em',
@@ -378,24 +419,9 @@ export default function PortfolioPage() {
                   minHeight: '60px',
                 }}>
                   <span style={{ color: '#cbd5e1' }}>A </span>
-                  <span style={{
-                    background: 'linear-gradient(90deg, #6366f1, #06b6d4)',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                    backgroundClip: 'text',
-                  }}>
-                    Software Developer
+                  <span className="portfolio-typewriter-highlight">
+                    <TypewriterText phrases={rotatingHeroPhrases} />
                   </span>
-                  <span style={{
-                    color: '#cbd5e1',
-                    display: 'inline-block',
-                    width: '3px',
-                    height: '1.2em',
-                    background: '#06b6d4',
-                    marginLeft: '8px',
-                    animation: 'blink 1s infinite',
-                    verticalAlign: 'middle',
-                  }} />
                 </div>
               </div>
 
